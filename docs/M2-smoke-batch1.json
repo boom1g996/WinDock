@@ -1,0 +1,42 @@
+{
+  "timestamp": "2026-11-09T15:08:19",
+  "exe": "D:\\workspace\\W&dock\\artifacts\\WinDock-framework-dependent\\DockHost.exe",
+  "early_exit_code": null,
+  "pid": 5700,
+  "started_new_process": true,
+  "windows": [
+    {
+      "class": "HwndWrapper[DockHost;;c2656f3b-54d7-4810-b0b9-58577aa46ff2]",
+      "rect": [
+        656,
+        986,
+        1137,
+        1112
+      ],
+      "size": [
+        481,
+        126
+      ]
+    }
+  ],
+  "visible_window_count": 1,
+  "sample_seconds": 30.0,
+  "idle_cpu_percent": 0.104,
+  "working_set_mb": 225.69,
+  "log_errors": [],
+  "log_tail": [
+    "[App][INFO] 2026-11-09 15:05:08.995 WinDock 启动",
+    "[Icon][INFO] 2026-11-09 15:05:09.009 PrivateExtractIconsW 导出可用=True；磁盘缓存启用=True",
+    "[WindowEnum][INFO] 2026-11-09 15:05:09.348 事件钩子就绪，初始聚合 7 个应用",
+    "[Dock][INFO] 2026-11-09 15:05:09.527 已尝试启用系统 Acrylic 背板（分层窗口下可能被系统忽略）",
+    "[App][INFO] 2026-11-09 15:07:47.605 WinDock 启动",
+    "[Icon][INFO] 2026-11-09 15:07:47.618 PrivateExtractIconsW 导出可用=True；磁盘缓存启用=True",
+    "[WindowEnum][INFO] 2026-11-09 15:07:48.446 事件钩子就绪，初始聚合 7 个应用",
+    "[Dock][INFO] 2026-11-09 15:07:48.604 已尝试启用系统 Acrylic 背板（分层窗口下可能被系统忽略）",
+    "[App][INFO] 2026-11-09 15:08:20.338 WinDock 启动",
+    "[Icon][INFO] 2026-11-09 15:08:20.351 PrivateExtractIconsW 导出可用=True；磁盘缓存启用=True",
+    "[WindowEnum][INFO] 2026-11-09 15:08:20.879 事件钩子就绪，初始聚合 7 个应用",
+    "[Dock][INFO] 2026-11-09 15:08:21.039 已尝试启用系统 Acrylic 背板（分层窗口下可能被系统忽略）"
+  ],
+  "verdict": "PASS"
+}

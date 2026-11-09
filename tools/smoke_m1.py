@@ -156,14 +156,18 @@ def main() -> int:
     ap.add_argument("--kill", action="store_true", help="terminate DockHost after verification")
     ap.add_argument("--sample-seconds", type=float, default=4.0,
                     help="idle CPU sampling window (default 4s)")
+    ap.add_argument("--output", default=None,
+                    help="result JSON path; M2+ 必须指定，避免覆盖 M1 交付记录 docs/M1-smoke-result.json")
     args = ap.parse_args()
     sample_seconds = max(1.0, args.sample_seconds)
+    result_path = Path(args.output) if args.output else RESULT
+    result_path.parent.mkdir(parents=True, exist_ok=True)
 
     started_at = datetime.now()
     report: dict = {"timestamp": started_at.isoformat(timespec="seconds"), "exe": str(EXE)}
     if not EXE.is_file():
         report["error"] = "DockHost.exe not found; run build_m1.ps1 -Publish first"
-        RESULT.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        result_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
         print(report["error"])
         return 2
 
@@ -210,10 +214,10 @@ def main() -> int:
         else "FAIL"
     )
 
-    RESULT.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+    result_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({k: v for k, v in report.items() if k != "log_tail"},
                      ensure_ascii=False, indent=2))
-    print(f"Result written to {RESULT}")
+    print(f"Result written to {result_path}")
 
     if args.kill:
         subprocess.run(["taskkill", "/PID", str(pid), "/F"],

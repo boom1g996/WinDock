@@ -138,12 +138,17 @@ public sealed class ConfigService : IConfigService
         anim.MagnifyRadius = Clamp(anim.MagnifyRadius, ConfigRanges.MagnifyRadius, "animation.magnifyRadius", warnings);
         anim.MagnifyDurationMs = Clamp(anim.MagnifyDurationMs, ConfigRanges.MagnifyDurationMs, "animation.magnifyDurationMs", warnings);
         anim.SpeedMultiplier = Clamp(anim.SpeedMultiplier, ConfigRanges.SpeedMultiplier, "animation.speedMultiplier", warnings);
+        anim.BounceCount = Clamp(anim.BounceCount, ConfigRanges.BounceCount, "animation.bounceCount", warnings);
+        anim.IndicatorFadeMs = Clamp(anim.IndicatorFadeMs, ConfigRanges.IndicatorFadeMs, "animation.indicatorFadeMs", warnings);
 
         var b = config.Behavior;
         b.ClickActiveApp = Choice(b.ClickActiveApp, ConfigRanges.ClickActiveAppModes, "showWindows", "behavior.clickActiveApp", warnings);
         b.RunningSort = Choice(b.RunningSort, ConfigRanges.RunningSorts, "recent", "behavior.runningSort", warnings);
         b.HideDelayMs = Clamp(b.HideDelayMs, ConfigRanges.HideDelayMs, "behavior.hideDelayMs", warnings);
         b.EdgeHotzonePx = Clamp(b.EdgeHotzonePx, ConfigRanges.EdgeHotzonePx, "behavior.edgeHotzonePx", warnings);
+        b.PreviewHoverDelayMs = Clamp(b.PreviewHoverDelayMs, ConfigRanges.PreviewHoverDelayMs, "behavior.previewHoverDelayMs", warnings);
+        b.PreviewMaxWindows = Clamp(b.PreviewMaxWindows, ConfigRanges.PreviewMaxWindows, "behavior.previewMaxWindows", warnings);
+        b.WatchdogHeartbeatMs = Clamp(b.WatchdogHeartbeatMs, ConfigRanges.WatchdogHeartbeatMs, "behavior.watchdogHeartbeatMs", warnings);
         if (string.IsNullOrWhiteSpace(b.HotkeyToggle))
         {
             b.HotkeyToggle = "Ctrl+Alt+D";

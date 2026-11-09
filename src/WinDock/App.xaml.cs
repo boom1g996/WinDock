@@ -65,7 +65,9 @@ public partial class App : Application
         }
 
         _enumerator = new WindowEnumerator(_log, SynchronizationContext.Current);
-        IIconService icons = new IconService(_log);
+        // WD-018：磁盘缓存按配置开关注入；关闭时退化为 M1 的纯内存缓存。
+        IIconService icons = new IconService(_log,
+            _config.Current.Behavior.IconCacheEnabled ? new IconCache(_log) : null);
         _animation = new AnimationEngine();
         IAppLauncher launcher = new AppLauncher(_log);
 

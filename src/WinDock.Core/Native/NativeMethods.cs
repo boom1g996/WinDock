@@ -9,7 +9,7 @@ namespace WinDock.Core.Native;
 /// 未文档化的导出（PrivateExtractIcons / SetWindowCompositionAttribute）先用
 /// HasExport 实测存在再调用，避免「臆造 API」。
 /// </summary>
-public static class NativeMethods
+public static partial class NativeMethods
 {
     public const int GWL_EXSTYLE = -20;
     public const long WS_EX_TOOLWINDOW = 0x00000080L;

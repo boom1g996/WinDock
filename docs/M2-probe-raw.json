@@ -1,0 +1,147 @@
+{
+  "timestamp": "2026-11-09T14:52:10+08:00",
+  "python": "3.13.14",
+  "os_build": 26200,
+  "scope": "M2 capability probe (read-only + reversible in-process writes)",
+  "exports": {
+    "dwmapi.dll": {
+      "DwmRegisterThumbnail": true,
+      "DwmUnregisterThumbnail": true,
+      "DwmUpdateThumbnailProperties": true,
+      "DwmQueryThumbnailSourceSize": true,
+      "DwmIsCompositionEnabled": true
+    },
+    "user32.dll": {
+      "RegisterHotKey": true,
+      "UnregisterHotKey": true,
+      "FlashWindowEx": true,
+      "SetWinEventHook": true,
+      "SetLayeredWindowAttributes": true,
+      "SetWindowCompositionAttribute": true,
+      "GetMonitorInfoW": true,
+      "EnumDisplayMonitors": true,
+      "GetForegroundWindow": true
+    },
+    "shell32.dll": {
+      "SHQueryUserNotificationState": true,
+      "Shell_NotifyIconW": true,
+      "SHGetFileInfoW": true
+    },
+    "all_present": true
+  },
+  "quns": {
+    "ok": true,
+    "hr": "S_OK",
+    "value": 5,
+    "name": "QUNS_ACCEPTS_NOTIFICATIONS",
+    "full_screen_flags": [
+      3,
+      4
+    ]
+  },
+  "foreground_geometry": {
+    "ok": true,
+    "hwnd": 329066,
+    "rect": [
+      256,
+      184,
+      1536,
+      984
+    ],
+    "primary_screen": [
+      1792,
+      1120
+    ],
+    "covers_primary": false
+  },
+  "monitors": {
+    "ok": true,
+    "count": 2,
+    "items": [
+      {
+        "monitor": [
+          0,
+          0,
+          1792,
+          1120
+        ],
+        "work": [
+          0,
+          48,
+          1792,
+          1120
+        ],
+        "primary": true
+      },
+      {
+        "monitor": [
+          -1920,
+          0,
+          0,
+          1080
+        ],
+        "work": [
+          -1920,
+          48,
+          0,
+          1080
+        ],
+        "primary": false
+      }
+    ],
+    "has_negative_coords": true
+  },
+  "hotkey": {
+    "ok": true,
+    "gesture": "Ctrl+Alt+D",
+    "win32_error": 0,
+    "note": "",
+    "unregistered": true
+  },
+  "dwm_thumbnail": {
+    "Shell_TrayWnd": {
+      "source": "Shell_TrayWnd",
+      "source_hwnd": 65986,
+      "register": "S_OK",
+      "register_ok": true,
+      "source_size": [
+        2240,
+        60
+      ],
+      "query_size": "S_OK",
+      "unregister": "S_OK",
+      "unregister_ok": true
+    },
+    "ok": true
+  },
+  "layered_hotzone": {
+    "ok": true,
+    "set_layered_ok": true,
+    "rect": [
+      100,
+      1118,
+      300,
+      1120
+    ],
+    "height_px": 2,
+    "ex_style": "0x080800A0",
+    "has_transparent": true,
+    "has_noactivate": true,
+    "has_toolwindow": true
+  },
+  "flash_events": {
+    "ok": true,
+    "hooks_installed": 3,
+    "flash_triggered": true,
+    "sample_seconds": 1.8,
+    "event_count": 0,
+    "alert_count": 0,
+    "statechange_count": 0,
+    "events_sample": [],
+    "verdict": "no-standard-winevent"
+  },
+  "probe_window": {
+    "ok": true,
+    "destroyed": true
+  }
+}

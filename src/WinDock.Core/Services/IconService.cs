@@ -21,16 +21,20 @@ public sealed class IconService : IIconService
     private const string Module = "Icon";
 
     private readonly ILogService _log;
+    private readonly IIconCache? _diskCache;
     private readonly Dictionary<string, ImageSource> _cache = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, (string Stamp, DateTime CachedUtc)> _stampCache =
         new(StringComparer.OrdinalIgnoreCase);
     private readonly bool _privateExtractAvailable;
 
-    public IconService(ILogService log)
+    /// <param name="log">日志服务。</param>
+    /// <param name="diskCache">M2 磁盘缓存；传 null 时退化为 M1 的纯内存缓存（便于自检）。</param>
+    public IconService(ILogService log, IIconCache? diskCache = null)
     {
         _log = log;
+        _diskCache = diskCache;
         _privateExtractAvailable = HasExport("user32.dll", "PrivateExtractIconsW");
-        _log.Info(Module, $"PrivateExtractIconsW 导出可用={_privateExtractAvailable}");
+        _log.Info(Module, $"PrivateExtractIconsW 导出可用={_privateExtractAvailable}；磁盘缓存启用={_diskCache is not null}");
     }
 
     public ImageSource? GetIcon(PinnedItem item, int size)
@@ -66,10 +70,22 @@ public sealed class IconService : IIconService
             }
         }
 
+        // M2 WD-018：内存未命中先查磁盘缓存，避免每次冷启动都做图标提取。
+        ImageSource? fromDisk = _diskCache?.Load(key);
+        if (fromDisk is not null)
+        {
+            lock (_cache)
+            {
+                _cache[key] = fromDisk;
+            }
+
+            return fromDisk;
+        }
+
+        bool exists = File.Exists(path) || Directory.Exists(path);
         ImageSource result;
         try
         {
-            bool exists = File.Exists(path) || Directory.Exists(path);
             result = exists
                 ? Extract(path, size)
                 : QuestionMark(size);
@@ -84,11 +100,18 @@ public sealed class IconService : IIconService
         {
             _log.Error(Module, $"图标提取失败：{path}", ex);
             result = QuestionMark(size);
+            exists = false;
         }
 
         lock (_cache)
         {
             _cache[key] = result;
+        }
+
+        // 只缓存真实提取到的图标；问号占位不入磁盘，避免失效路径长期占空间。
+        if (exists)
+        {
+            _diskCache?.Store(key, result);
         }
 
         return result;
