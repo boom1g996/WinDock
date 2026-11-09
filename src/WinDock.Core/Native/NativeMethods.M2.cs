@@ -154,6 +154,81 @@ public static partial class NativeMethods
     public static extern bool EnumDisplayMonitors(IntPtr hdc, IntPtr lprcClip,
         MonitorEnumProc lpfnEnum, IntPtr dwData);
 
+    // ---- 托盘（WD-034：去 WinForms 化，纯 Shell_NotifyIcon） -----------------
+
+    public const uint NIM_ADD = 0x00000000;
+    public const uint NIM_MODIFY = 0x00000001;
+    public const uint NIM_DELETE = 0x00000002;
+    public const uint NIF_MESSAGE = 0x00000001;
+    public const uint NIF_ICON = 0x00000002;
+    public const uint NIF_TIP = 0x00000004;
+    public const uint NIF_INFO = 0x00000010;
+    public const uint NIIF_WARNING = 0x00000003;
+
+    public const uint WM_DESTROY = 0x0002;
+    public const uint WM_RBUTTONUP = 0x0205;
+    public const uint WM_LBUTTONUP = 0x0202;
+    public const uint WM_LBUTTONDBLCLK = 0x0203;
+
+    public const uint MF_STRING = 0x00000000;
+    public const uint MF_SEPARATOR = 0x00000800;
+    public const uint TPM_RETURNCMD = 0x0100;
+    public const uint TPM_RIGHTBUTTON = 0x0002;
+    public const uint TPM_NONOTIFY = 0x0080;
+    public const uint TPM_BOTTOMALIGN = 0x0020;
+
+    public const uint IMAGE_ICON = 1;
+    public const uint LR_SHARED = 0x00008000;
+    public const uint LR_DEFAULTSIZE = 0x00000040;
+
+    /// <summary>Shell_NotifyIconW 的数据结构（Unicode 版本，字段序与 SDK 头一致）。</summary>
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct NOTIFYICONDATA
+    {
+        public uint cbSize;
+        public IntPtr hWnd;
+        public uint uID;
+        public uint uFlags;
+        public uint uCallbackMessage;
+        public IntPtr hIcon;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)] public string szTip;
+        public uint dwState;
+        public uint dwStateMask;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 256)] public string szInfo;
+        public uint uTimeoutOrVersion;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 64)] public string szInfoTitle;
+        public uint dwInfoFlags;
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern bool Shell_NotifyIconW(uint dwMessage, ref NOTIFYICONDATA lpData);
+
+    /// <summary>
+    /// 共享加载系统图标。lpIconName 用 IntPtr：序数资源（IDI_*）必须传
+    /// MAKEINTRESOURCE(id)（即数值指针 &lt; 0x10000），字符串封送会被当成
+    /// 资源名查找并报 1813（M2 第五批实测）。
+    /// </summary>
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr LoadImageW(IntPtr hInstance, IntPtr lpIconName,
+        uint uType, int cxDesired, int cyDesired, uint fuLoad);
+
+    /// <summary>IDI_APPLICATION = 32512（0x7F00）。</summary>
+    public const int IDI_APPLICATION = 32512;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern IntPtr CreatePopupMenu();
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern bool AppendMenuW(IntPtr hMenu, uint uFlags, uint uIDNewItem,
+        string lpNewItem);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool DestroyMenu(IntPtr hMenu);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern int TrackPopupMenu(IntPtr hMenu, uint uFlags,
+        int x, int y, int nReserved, IntPtr hWnd, IntPtr prcRect);
+
     /// <summary>把一个 HRESULT 转成便于日志阅读的十六进制串。</summary>
     public static string HResultText(int hr) =>
         hr == 0 ? "S_OK" : $"0x{ unchecked((uint)hr):X8}";

@@ -1,6 +1,4 @@
 using System.IO;
-using Drawing = System.Drawing;
-using WinForms = System.Windows.Forms;
 using WinDock.Core;
 using WinDock.Core.Interfaces;
 using WinDock.Core.Models;
@@ -8,7 +6,11 @@ using WinDock.Core.Services;
 
 namespace WinDock.Services;
 
-/// <summary>托盘图标与菜单（WD-011 / FR-501 的系统原生风格菜单由 ContextMenuStrip 提供）。</summary>
+/// <summary>
+/// 托盘入口（WD-011 / FR-501）：M2 第五批（WD-034 / K-01）由 WinForms NotifyIcon
+/// 换成 Core 层纯 Win32 <see cref="TrayIconService"/>，移除 WinForms/System.Drawing
+/// 模块映射（实测约 20MB），菜单为系统原生 TrackPopupMenu 风格。
+/// </summary>
 public sealed class TrayService : IDisposable
 {
     private const string Module = "Tray";
@@ -19,9 +21,7 @@ public sealed class TrayService : IDisposable
     private readonly MainWindow _dock;
     private readonly Action _openSettings;
     private readonly Action _openGuide;
-    private readonly WinForms.NotifyIcon _icon;
-    private readonly WinForms.ContextMenuStrip _menu;
-    private readonly WinForms.ToolStripMenuItem _toggleItem;
+    private readonly TrayIconService _tray;
 
     public TrayService(IConfigService config, ILogService log, ITaskbarInterop taskbar,
         MainWindow dock, Action openSettings, Action openGuide)
@@ -33,23 +33,8 @@ public sealed class TrayService : IDisposable
         _openSettings = openSettings;
         _openGuide = openGuide;
 
-        _menu = new WinForms.ContextMenuStrip();
-        _toggleItem = Item("Dock_Hide", ToggleDock);
-        _menu.Items.Add(_toggleItem);
-        _menu.Items.Add(Item("Tray_RestoreTaskbar", RestoreTaskbar));
-        _menu.Items.Add(new WinForms.ToolStripSeparator());
-        _menu.Items.Add(Item("Tray_Settings", () => _openSettings()));
-        _menu.Items.Add(Item("Tray_Guide", () => _openGuide()));
-        _menu.Items.Add(Item("Tray_Exit", () => System.Windows.Application.Current.Shutdown()));
-
-        _icon = new WinForms.NotifyIcon
-        {
-            Icon = Drawing.SystemIcons.Application,
-            Text = Loc.Instance.T("Tray_Tip"),
-            ContextMenuStrip = _menu,
-            Visible = true,
-        };
-        _icon.DoubleClick += (_, _) => _openSettings();
+        _tray = new TrayIconService(log, BuildMenu, openSettings);
+        _tray.Show(Loc.Instance.T("Tray_Tip"));
     }
 
     /// <summary>
@@ -68,49 +53,41 @@ public sealed class TrayService : IDisposable
         _log.Warn(Module,
             $"上次异常退出已由看门狗处理：pid={recovery.Pid}, reason={recovery.Reason}, "
             + $"taskbarRestored={recovery.TaskbarRestored}, snapshot={recovery.SnapshotPresent}");
-        try
-        {
-            _icon.ShowBalloonTip(5000,
-                Loc.Instance.T("Tray_RecoveryTitle"),
-                Loc.Instance.T("Tray_RecoveryText"),
-                WinForms.ToolTipIcon.Warning);
-        }
-        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-            _log.Warn(Module, $"托盘气泡显示失败：{ex.Message}");
-        }
+        _tray.ShowBalloon(Loc.Instance.T("Tray_RecoveryTitle"),
+            Loc.Instance.T("Tray_RecoveryText"), warning: true);
     }
 
     public void ApplyConfig(DockConfig config)
     {
         // 托盘图标永远保留一个最小可见性，否则「退出」也无处可点（配置 showTrayIcon=false 时
         // 改为隐藏图标但保留进程，用户仍可用 Ctrl+Alt+D 或直接结束进程）。
-        _icon.Visible = config.Behavior.ShowTrayIcon;
-        UpdateToggleText();
+        if (config.Behavior.ShowTrayIcon)
+        {
+            _tray.Show(Loc.Instance.T("Tray_Tip"));
+        }
+        else
+        {
+            _tray.Hide();
+        }
     }
 
     public void Dispose()
     {
-        _icon.Visible = false;
-        _icon.Dispose();
-        _menu.Dispose();
+        _tray.Dispose();
     }
 
-    private WinForms.ToolStripMenuItem Item(string key, Action action)
+    /// <summary>菜单每次弹出时重建：隐藏/显示 Dock 的文本随状态刷新。</summary>
+    private IReadOnlyList<TrayMenuItem> BuildMenu()
     {
-        var item = new WinForms.ToolStripMenuItem(Loc.Instance.T(key));
-        item.Click += (_, _) =>
+        return new List<TrayMenuItem>
         {
-            try
-            {
-                action();
-            }
-            catch (Exception ex)
-            {
-                _log.Error(Module, $"托盘菜单动作失败：{key}", ex);
-            }
+            new(Loc.Instance.T(_dock.IsDockVisible ? "Dock_Hide" : "Dock_Show"), ToggleDock),
+            new(Loc.Instance.T("Tray_RestoreTaskbar"), RestoreTaskbar),
+            new(string.Empty, () => { }) { IsSeparator = true },
+            new(Loc.Instance.T("Tray_Settings"), () => _openSettings()),
+            new(Loc.Instance.T("Tray_Guide"), () => _openGuide()),
+            new(Loc.Instance.T("Tray_Exit"), () => System.Windows.Application.Current.Shutdown()),
         };
-        return item;
     }
 
     private void ToggleDock()
@@ -123,14 +100,6 @@ public sealed class TrayService : IDisposable
         {
             _dock.ShowDock();
         }
-
-        UpdateToggleText();
-    }
-
-    private void UpdateToggleText()
-    {
-        string key = _dock.IsDockVisible ? "Dock_Hide" : "Dock_Show";
-        _toggleItem.Text = Loc.Instance.T(key);
     }
 
     private void RestoreTaskbar()

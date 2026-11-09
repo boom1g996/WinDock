@@ -1,0 +1,85 @@
+{
+  "timestamp": "2026-11-09T18:37:32",
+  "exe": "D:\\workspace\\W&dock\\artifacts\\WinDock-framework-dependent\\DockHost.exe",
+  "cursor_original": [
+    545,
+    278
+  ],
+  "early_exit_code": null,
+  "pid": 32036,
+  "started_new_process": true,
+  "windows": [
+    {
+      "hwnd": 1051790,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1118,
+        1792,
+        1120
+      ],
+      "size": [
+        1792,
+        2
+      ],
+      "visible": true
+    }
+  ],
+  "visible_window_count": 1,
+  "dock_window_present": true,
+  "auto_hidden": true,
+  "hotzone_windows": [
+    {
+      "hwnd": 1051790,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1118,
+        1792,
+        1120
+      ],
+      "size": [
+        1792,
+        2
+      ],
+      "visible": true
+    }
+  ],
+  "cursor_parked": [
+    10,
+    200
+  ],
+  "settle_seconds": 10.0,
+  "cold_start_cpu_seconds": 1.031,
+  "cpu_trace_percent_per_5s": [
+    0.0,
+    0.312,
+    0.0,
+    0.0,
+    0.312,
+    0.0
+  ],
+  "sample_seconds": 30.0,
+  "idle_cpu_percent": 0.104,
+  "working_set_mb": 209.73,
+  "log_errors": [],
+  "log_tail": [
+    "[Metrics][INFO] 2026-11-09 18:36:56.080 cpu-spike window: 31.2ms/2s → enumerate.refresh×2, watchdog.heartbeat_write×1",
+    "[App][INFO] 2026-11-09 18:37:33.109 WinDock 启动",
+    "[Metrics][INFO] 2026-11-09 18:37:33.120 mark startup.config_loaded",
+    "[Metrics][INFO] 2026-11-09 18:37:33.126 CPU 采样已启动：突发阈值=15ms/2s，汇总间隔=30s",
+    "[Icon][INFO] 2026-11-09 18:37:33.136 PrivateExtractIconsW 导出可用=True；磁盘缓存启用=True",
+    "[AutoHide][INFO] 2026-11-09 18:37:33.411 自动隐藏=True, 延迟=800ms, 全屏隐藏=True",
+    "[WindowEnum][INFO] 2026-11-09 18:37:33.414 事件钩子就绪，初始枚举已排队（后台线程）",
+    "[Dock][INFO] 2026-11-09 18:37:33.551 已尝试启用系统 Acrylic 背板（分层窗口下可能被系统忽略）",
+    "[Hotkey][INFO] 2026-11-09 18:37:33.555 全局快捷键 Ctrl+Alt+D 已注册",
+    "[Metrics][INFO] 2026-11-09 18:37:33.610 mark startup.first_show",
+    "[Metrics][INFO] 2026-11-09 18:37:35.140 cpu-spike window: 781.2ms/2s → ui.animation_frame×69, ui.rebuild_icons×2, enumerate.refresh×1, fullscreen.check×1",
+    "[Metrics][INFO] 2026-11-09 18:38:03.132 summary cpu=0.0ms/s | enumerate.refresh: n=1, total=79ms, max=79ms, fullscreen.check: n=5, total=4ms, max=1ms, ui.animation_frame: n=69, total=0ms, max=0ms, ui.rebuild_icons: n=2, total=14ms, max=9ms"
+  ],
+  "log_errors_late": [],
+  "verdict": "PASS",
+  "cursor_restored": true
+}

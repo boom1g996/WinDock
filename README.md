@@ -2,9 +2,9 @@
 
 把 Windows 11 任务栏改造成 macOS Dock 风格的桌面应用：悬浮胶囊、邻域放大、运行指示点、窗口缩略图预览、首次启动引导、自动隐藏、拖拽排序、独立进程看门狗与多屏适配。
 
-> **当前阶段**：M1 MVP（WD-001~013）已落地；**M2 四批已实施**（需求 14.1 已满足）：第一批预研 / 骨架 / WD-018 图标缓存，第二批 WD-019 动画 + WD-015 自动隐藏 / 热区 / 全屏 / 热键，第三批 WD-014 缩略图预览 + WD-017 首次引导，第四批 WD-016 拖拽排序 + WD-020 独立进程 Watchdog。Release 构建 0 警告 0 错误、离线自检 **34/34**、第四批功能冒烟 **PASS**（拖拽顺序落盘、预览面板开合、强杀后 ≤10s 恢复、正常退出 S 帧握手）。
+> **当前阶段**：M1 MVP（WD-001~013）已落地；**M2 五批已实施**（需求 14.1 已满足）：第一批预研 / 骨架 / WD-018 图标缓存，第二批 WD-019 动画 + WD-015 自动隐藏 / 热区 / 全屏 / 热键，第三批 WD-014 缩略图预览 + WD-017 首次引导，第四批 WD-016 拖拽排序 + WD-020 独立进程 Watchdog，第五批 WD-033 内置打点与 CPU 突发归因 + WD-034 托盘去 WinForms 化。Release 构建 0 警告 0 错误（**无 WinForms 依赖**）、离线自检 **38/38**、第五批功能冒烟 **PASS**。
 >
-> **性能如实说明**：第四批 30s 稳态 CPU **0.573%**（分段 0.312~0.938%，无第三批的 10% 突发）、内存 **208.46MB**，**仍未达到需求 8.1 的 ≤0.3% / ≤120MB**，不伪装达标；K-13 / K-14 交 WD-033 / WD-034 定位。详见 [M2 变更说明与已知问题](docs/M2-变更说明与已知问题.md)；进度见 [M2 设计说明与任务拆解](docs/M2-设计说明与任务拆解.md) §4.1~4.4；M1 交付见 [docs/M1-变更说明与已知问题.md](docs/M1-变更说明与已知问题.md)。
+> **性能如实说明**：第五批定位并修复稳态 CPU 突发根因（周期性唤醒的 15.6ms 记账刻度：枚举移后台 / 全屏退避 / 心跳 5s）：30s 稳态 CPU **0.417%**；**对照实验关闭看门狗 = 0.104% ≤0.3% 达标**——8.1 与 AC-11 的 UI 心跳存在内在张力，口径待产品确认（K-13 已量化收口）。内存去 WinForms 后 **191~196MB**（原 ~218MB），仍 >120MB（WPF D3D / Intel 驱动结构性开销，K-01/K-14）。详见 [M2 变更说明与已知问题](docs/M2-变更说明与已知问题.md)；进度见 [M2 设计说明与任务拆解](docs/M2-设计说明与任务拆解.md) §4.1~4.5；M1 交付见 [docs/M1-变更说明与已知问题.md](docs/M1-变更说明与已知问题.md)。
 
 ## 项目管理
 
@@ -30,6 +30,7 @@
 | [M2-smoke-batch3.json](docs/M2-smoke-batch3.json) | 第三批功能冒烟：引导窗口、预览面板、稳态 CPU；`-initial` 保留回环回归现场，`-idle-trace` 为 30s 分段复采 |
 | [M2-smoke-batch4.json](docs/M2-smoke-batch4.json) | 第四批功能冒烟：拖拽顺序落盘、预览开合、看门狗强杀恢复与正常退出 S 帧握手 |
 | [M2-smoke-batch4-idle.json](docs/M2-smoke-batch4-idle.json) | 第四批 30s 纯稳态 CPU 分段与内存 |
+| [M2-smoke-batch5*.json](docs/M2-smoke-batch5-full.json) | 第五批：全功能冒烟 / 30s 稳态（0.417%）/ 关看门狗对照（0.104% 达标）/ 锁屏环境对照 |
 | [M1-smoke-result.json](docs/M1-smoke-result.json) | M1 交付冒烟原始结果（窗口 / CPU / 内存 / 日志错误） |
 | [BACKLOG](docs/BACKLOG.md) | 5 里程碑 / 39 议题（含 M2 新增 4 条）/ 17 标签 |
 | [M0-probe-raw.json](docs/M0-probe-raw.json) | 只读系统探针原始输出 |
@@ -64,7 +65,7 @@ python tools/smoke_m1.py --restart --park-cursor --sample-seconds 30 `
   --settle-seconds 8 --cpu-trace --output docs/M2-smoke-batch4-idle.json
 ```
 
-产物目录 `artifacts/WinDock-framework-dependent/` 下 `DockHost.exe`（主程序）、`WinDock.Settings.exe`（设置窗口）、`WinDock.Watchdog.exe`（守护进程）**三者必须同目录**；守护进程缺失时主程序会记 WARN 并降级为关闭。主程序另支持 `DockHost.exe --selftest` 运行 **34 项**零依赖自检（配置 / 动画 / 调度器 / DWM 几何 / 引导 / 拖拽顺序持久化 / 看门狗协议），`DockHost.exe --exit` 请求已运行实例优雅退出（供安装器与自动化使用）。
+产物目录 `artifacts/WinDock-framework-dependent/` 下 `DockHost.exe`（主程序）、`WinDock.Settings.exe`（设置窗口）、`WinDock.Watchdog.exe`（守护进程）**三者必须同目录**；守护进程缺失时主程序会记 WARN 并降级为关闭。主程序另支持 `DockHost.exe --selftest` 运行 **38 项**零依赖自检（配置 / 动画 / 调度器 / DWM 几何 / 引导 / 拖拽顺序持久化 / 看门狗协议 / 打点聚合），`DockHost.exe --exit` 请求已运行实例优雅退出（供安装器与自动化使用）。托盘为纯 Win32 实现（`Shell_NotifyIcon` + 原生菜单，无 WinForms 依赖）；`behavior.metricsEnabled`（默认开）输出本地性能打点与 CPU 突发归因（`[Metrics]` 日志行，不上报）。
 
 当前为 framework-dependent 发布，运行需 .NET 10 桌面运行时；离线环境缺 runtime packs 导致自包含单文件发布回退，见已知问题 K-02。
 

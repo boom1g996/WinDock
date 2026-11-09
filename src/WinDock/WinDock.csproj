@@ -3,20 +3,10 @@
     <OutputType>WinExe</OutputType>
     <RootNamespace>WinDock</RootNamespace>
     <AssemblyName>DockHost</AssemblyName>
-    <UseWindowsForms>true</UseWindowsForms>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\WinDock.Core\WinDock.Core.csproj" />
-    <!-- 托盘只用 WinForms 的 NotifyIcon；移除其 global using 以免与 WPF 的
-         Application / UserControl / ContextMenu / KeyEventArgs 重名。 -->
-    <Using Remove="System.Windows.Forms" />
-    <Using Remove="System.Drawing" />
   </ItemGroup>
-  <PropertyGroup>
-    <!-- WPF 的 PerMonitorV2 由 app.manifest 声明；WinForms SDK 的 WFO0003 只是
-         建议改用它自己的 API，混合项目下 suppress 掉，不影响 DPI 行为。 -->
-    <NoWarn>$(NoWarn);WFO0003</NoWarn>
-  </PropertyGroup>
 </Project>

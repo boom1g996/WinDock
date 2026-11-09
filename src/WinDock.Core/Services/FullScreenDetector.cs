@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Threading;
 using WinDock.Core.Interfaces;
 using static WinDock.Core.Native.NativeMethods;
 
@@ -9,31 +10,39 @@ namespace WinDock.Core.Services;
 ///
 /// 以事件驱动为主：前台切换、最小化/还原、窗口尺寸变化结束（F11 / 全屏播放器
 /// 必然 resize）都会立即判定，满足 AC-08「立即隐藏」。
-/// SHQueryUserNotificationState 没有公开的状态变更通知，因此保留一个
-/// **3s 兜底确认**（复用唯一 ITimerScheduler，不是独立 Timer / DispatcherTimer）；
-/// 1s 版本实测把稳态空闲 CPU 推到 0.7%（需求 8.1 ≤0.3%），3s 仅为状态兜底。
+/// SHQueryUserNotificationState 没有公开的状态变更通知，因此保留兜底轮询。
+/// WD-033 实测（归因数据）后两项优化：
+/// - 兜底轮询改**后台线程**（专用 Timer，不走 ITimerScheduler、不碰 UI 线程），
+///   只有状态翻转才 Post UI —— 旧实现把 Check 派发到 UI 会周期性唤醒消息泵；
+/// - 轮询周期**自适应退避**：状态稳定时 3s → 6s → 12s 封顶（每次唤醒都被进程
+///   CPU 记账计一个 15.6ms 刻度，固定 3s 会把稳态推高，K-13）；
+///   任何事件或状态翻转立即回到 3s，保证 AC-08 的反应速度由事件路径承担。
 /// 事件回调合并为一次 UI 派发，避免事件洪泛。
 /// </summary>
 public sealed class FullScreenDetector : IFullScreenDetector
 {
     private const string Module = "FullScreen";
-    private const string PollKey = "fullscreen.confirm";
-    private const int PollIntervalMs = 3000;
+    private const int PollBaseMs = 3000;
+    private const int PollMaxMs = 12000;
 
     private readonly ILogService _log;
-    private readonly ITimerScheduler _timers;
+    private readonly IMetricsService? _metrics;
     private readonly SynchronizationContext? _uiContext;
     private readonly List<IntPtr> _hooks = new();
+    private readonly object _stateSync = new();
     private WinEventProc? _hookProc;
+    private System.Threading.Timer? _pollTimer;
     private int _checkPending;
+    private int _pollIntervalMs = PollBaseMs;
+    private int _stablePolls;
     private bool _running;
 
-    public FullScreenDetector(ILogService log, ITimerScheduler timers,
-        SynchronizationContext? uiContext = null)
+    public FullScreenDetector(ILogService log,
+        SynchronizationContext? uiContext = null, IMetricsService? metrics = null)
     {
         _log = log;
-        _timers = timers;
         _uiContext = uiContext ?? SynchronizationContext.Current;
+        _metrics = metrics;
     }
 
     public event EventHandler<bool>? StateChanged;
@@ -54,8 +63,10 @@ public sealed class FullScreenDetector : IFullScreenDetector
         AddHook(EVENT_SYSTEM_MINIMIZESTART, EVENT_SYSTEM_MINIMIZEEND, flags);   // 最小化/还原
         AddHook(EVENT_SYSTEM_MOVESIZEEND, EVENT_SYSTEM_MOVESIZEEND, flags);     // 全屏 resize
 
-        Check();
-        ScheduleNext();
+        Check(); // 启动时在调用方线程（UI）先判定一次
+        _pollIntervalMs = PollBaseMs;
+        _stablePolls = 0;
+        SchedulePoll();
     }
 
     public void Stop()
@@ -66,8 +77,8 @@ public sealed class FullScreenDetector : IFullScreenDetector
         }
 
         _running = false;
-        _timers.Cancel(PollKey);
-        foreach (IntPtr hook in _hooks)
+        _pollTimer?.Dispose();
+        _pollTimer = null;        foreach (IntPtr hook in _hooks)
         {
             if (hook != IntPtr.Zero)
             {
@@ -84,30 +95,57 @@ public sealed class FullScreenDetector : IFullScreenDetector
     /// <summary>立即判定一次（也可供热区触发时手动复核）。</summary>
     public void Check()
     {
-        bool qunsHit = false;
-        int hr = SHQueryUserNotificationState(out int quns);
-        if (hr == 0)
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        try
         {
-            qunsHit = quns == QUNS_RUNNING_D3D_FULL_SCREEN
-                      || quns == QUNS_PRESENTATION_MODE;
+            CheckCore();
         }
-        else
+        finally
         {
-            _log.Warn(Module, $"SHQueryUserNotificationState 失败 HRESULT={HResultText(hr)}");
+            _metrics?.Record("fullscreen.check", sw.Elapsed.TotalMilliseconds);
         }
+    }
 
-        bool rectHit = ForegroundCoversMonitor();
-        bool full = qunsHit || rectHit;
-        if (full == IsFullScreen)
+    private void CheckCore()
+    {
+        lock (_stateSync)
         {
-            return;
-        }
+            bool qunsHit = false;
+            int hr = SHQueryUserNotificationState(out int quns);
+            if (hr == 0)
+            {
+                qunsHit = quns == QUNS_RUNNING_D3D_FULL_SCREEN
+                          || quns == QUNS_PRESENTATION_MODE;
+            }
+            else
+            {
+                _log.Warn(Module, $"SHQueryUserNotificationState 失败 HRESULT={HResultText(hr)}");
+            }
 
-        IsFullScreen = full;
-        _log.Info(Module, full
-            ? $"进入全屏/演示态（QUNS={quns}, rectHit={rectHit}），Dock 将隐藏并禁用热区"
-            : "退出全屏/演示态，准备恢复 Dock");
-        StateChanged?.Invoke(this, full);
+            bool rectHit = ForegroundCoversMonitor();
+            bool full = qunsHit || rectHit;
+            if (full == IsFullScreen)
+            {
+                return;
+            }
+
+            IsFullScreen = full;
+            ResetPollBackoff(); // 状态翻转后回到高频兜底，观察是否再次翻转
+            _log.Info(Module, full
+                ? $"进入全屏/演示态（QUNS={quns}, rectHit={rectHit}），Dock 将隐藏并禁用热区"
+                : "退出全屏/演示态，准备恢复 Dock");
+
+            // 兜底轮询可能在后台线程触发；订阅方（AutoHideController / HotZone）
+            // 状态不是线程安全的，状态翻转必须回到 UI 线程派发。
+            if (_uiContext is not null && SynchronizationContext.Current != _uiContext)
+            {
+                _uiContext.Post(_ => StateChanged?.Invoke(this, full), null);
+            }
+            else
+            {
+                StateChanged?.Invoke(this, full);
+            }
+        }
     }
 
     private bool ForegroundCoversMonitor()
@@ -154,6 +192,7 @@ public sealed class FullScreenDetector : IFullScreenDetector
             return; // 事件洪泛时合并为一次 UI 派发
         }
 
+        ResetPollBackoff(); // 有事件说明系统活跃，兜底立即回到高频
         if (_uiContext is not null)
         {
             _uiContext.Post(_ =>
@@ -172,22 +211,40 @@ public sealed class FullScreenDetector : IFullScreenDetector
         }
     }
 
-    private void ScheduleNext()
+    /// <summary>按当前退避周期安排下一次兜底轮询（一次性 Timer，到期后重排）。</summary>
+    private void SchedulePoll()
     {
         if (!_running)
         {
             return;
         }
 
-        _timers.Schedule(PollKey, PollIntervalMs, () =>
+        _pollTimer?.Dispose();
+        int interval = _pollIntervalMs;
+        _pollTimer = new System.Threading.Timer(_ =>
         {
             if (!_running)
             {
                 return;
             }
 
+            // 后台线程判定；状态翻转才 Post UI。稳定时退避翻倍，封顶 12s。
+            _stablePolls++;
+            if (_stablePolls >= 2)
+            {
+                _stablePolls = 0;
+                _pollIntervalMs = Math.Min(_pollIntervalMs * 2, PollMaxMs);
+            }
+
             Check();
-            ScheduleNext();
-        });
+            SchedulePoll();
+        }, null, interval, Timeout.Infinite);
+    }
+
+    /// <summary>事件到达或状态翻转时把退避周期重置回 3s（事件路径承担反应速度）。</summary>
+    private void ResetPollBackoff()
+    {
+        _pollIntervalMs = PollBaseMs;
+        _stablePolls = 0;
     }
 }

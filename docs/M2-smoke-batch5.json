@@ -1,0 +1,85 @@
+{
+  "timestamp": "2026-11-09T18:36:18",
+  "exe": "D:\\workspace\\W&dock\\artifacts\\WinDock-framework-dependent\\DockHost.exe",
+  "cursor_original": [
+    545,
+    278
+  ],
+  "early_exit_code": null,
+  "pid": 9528,
+  "started_new_process": true,
+  "windows": [
+    {
+      "hwnd": 986254,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1118,
+        1792,
+        1120
+      ],
+      "size": [
+        1792,
+        2
+      ],
+      "visible": true
+    }
+  ],
+  "visible_window_count": 1,
+  "dock_window_present": true,
+  "auto_hidden": true,
+  "hotzone_windows": [
+    {
+      "hwnd": 986254,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1118,
+        1792,
+        1120
+      ],
+      "size": [
+        1792,
+        2
+      ],
+      "visible": true
+    }
+  ],
+  "cursor_parked": [
+    10,
+    200
+  ],
+  "settle_seconds": 10.0,
+  "cold_start_cpu_seconds": 2.047,
+  "cpu_trace_percent_per_5s": [
+    0.625,
+    0.312,
+    0.312,
+    0.312,
+    0.312,
+    0.625
+  ],
+  "sample_seconds": 30.0,
+  "idle_cpu_percent": 0.417,
+  "working_set_mb": 214.03,
+  "log_errors": [],
+  "log_tail": [
+    "[AutoHide][INFO] 2026-11-09 18:36:20.435 自动隐藏=True, 延迟=800ms, 全屏隐藏=True",
+    "[WindowEnum][INFO] 2026-11-09 18:36:20.440 事件钩子就绪，初始枚举已排队（后台线程）",
+    "[Dock][INFO] 2026-11-09 18:36:20.623 已尝试启用系统 Acrylic 背板（分层窗口下可能被系统忽略）",
+    "[Hotkey][INFO] 2026-11-09 18:36:20.626 全局快捷键 Ctrl+Alt+D 已注册",
+    "[Metrics][INFO] 2026-11-09 18:36:20.700 mark startup.first_show",
+    "[Watchdog][INFO] 2026-11-09 18:36:20.757 看门狗已启动 pid=33600，阈值=10000ms，心跳间隔=5000ms",
+    "[Watchdog][INFO] 2026-11-09 18:36:20.920 启动：宿主 pid=9528，失联阈值=10000ms",
+    "[Metrics][INFO] 2026-11-09 18:36:22.090 cpu-spike window: 1468.8ms/2s → ui.animation_frame×53, ui.rebuild_icons×2, enumerate.refresh×1, fullscreen.check×1, watchdog.heartbeat_write×1",
+    "[Metrics][INFO] 2026-11-09 18:36:24.081 cpu-spike window: 265.6ms/2s → fullscreen.check×1",
+    "[Metrics][INFO] 2026-11-09 18:36:34.080 cpu-spike window: 31.2ms/2s → fullscreen.check×1",
+    "[Metrics][INFO] 2026-11-09 18:36:50.087 summary cpu=0.0ms/s | enumerate.refresh: n=1, total=110ms, max=110ms, fullscreen.check: n=5, total=3ms, max=1ms, ui.animation_frame: n=53, total=0ms, max=0ms, ui.rebuild_icons: n=2, total=21ms, max=14ms, watchdog.heartbeat_write: n=6, total=8ms, max=7ms",
+    "[Metrics][INFO] 2026-11-09 18:36:56.080 cpu-spike window: 31.2ms/2s → enumerate.refresh×2, watchdog.heartbeat_write×1"
+  ],
+  "log_errors_late": [],
+  "verdict": "PASS",
+  "cursor_restored": true
+}

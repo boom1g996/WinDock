@@ -24,6 +24,7 @@ public sealed class WindowEnumerator : IWindowEnumerator
     };
 
     private readonly ILogService _log;
+    private readonly IMetricsService? _metrics;
     private readonly SynchronizationContext? _uiContext;
     private readonly List<WinEventProc> _hookProcs = new();
     private readonly List<IntPtr> _hooks = new();
@@ -35,10 +36,12 @@ public sealed class WindowEnumerator : IWindowEnumerator
     private string _lastSignature = "";
     private bool _running;
 
-    public WindowEnumerator(ILogService log, SynchronizationContext? uiContext = null)
+    public WindowEnumerator(ILogService log, SynchronizationContext? uiContext = null,
+        IMetricsService? metrics = null)
     {
         _log = log;
         _uiContext = uiContext ?? SynchronizationContext.Current;
+        _metrics = metrics;
     }
 
     public event EventHandler? WindowsChanged;
@@ -68,8 +71,10 @@ public sealed class WindowEnumerator : IWindowEnumerator
         AddHook(EVENT_OBJECT_CREATE, EVENT_OBJECT_HIDE);
         _debounce = new Timer(_ => DispatchRefresh(), null, Timeout.Infinite, Timeout.Infinite);
         _running = true;
-        Refresh();
-        _log.Info(Module, $"事件钩子就绪，初始聚合 {Groups.Count} 个应用");
+        // 初始全量扫描也走 DispatchRefresh（后台线程），与后续去抖刷新共用
+        // _refreshPending 串行化，避免签名比较出现并发窗口。
+        DispatchRefresh();
+        _log.Info(Module, "事件钩子就绪，初始枚举已排队（后台线程）");
     }
 
     public void Stop()
@@ -134,13 +139,26 @@ public sealed class WindowEnumerator : IWindowEnumerator
             return;
         }
 
-        Action work = () =>
+        // WD-033：枚举本身是纯 Win32 + 数据结构（Groups 读写都在 _sync 内），
+        // 放到后台线程执行；只有窗口集合真的变化时才回到 UI 线程触发重建。
+        // 旧实现把整轮 EnumWindows 派发到 UI 线程，是稳态 CPU 突发的来源之一（K-13）。
+        ThreadPool.QueueUserWorkItem(_ =>
         {
             try
             {
-                if (Refresh())
+                var sw = Stopwatch.StartNew();
+                bool changed = Refresh();
+                _metrics?.Record("enumerate.refresh", sw.Elapsed.TotalMilliseconds);
+                if (changed)
                 {
-                    WindowsChanged?.Invoke(this, EventArgs.Empty);
+                    if (_uiContext is not null)
+                    {
+                        _uiContext.Post(_ => WindowsChanged?.Invoke(this, EventArgs.Empty), null);
+                    }
+                    else
+                    {
+                        WindowsChanged?.Invoke(this, EventArgs.Empty);
+                    }
                 }
             }
             catch (Exception ex)
@@ -151,16 +169,7 @@ public sealed class WindowEnumerator : IWindowEnumerator
             {
                 Volatile.Write(ref _refreshPending, 0);
             }
-        };
-
-        if (_uiContext is not null)
-        {
-            _uiContext.Post(_ => work(), null);
-        }
-        else
-        {
-            ThreadPool.QueueUserWorkItem(_ => work());
-        }
+        });
     }
 
     /// <returns>窗口集合是否真的变化；无变化时 UI 不应重建。</returns>

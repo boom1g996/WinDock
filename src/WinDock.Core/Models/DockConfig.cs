@@ -121,6 +121,12 @@ public sealed class BehaviorConfig
 
     /// <summary>图标磁盘缓存开关（FR-6.11 / WD-018）。</summary>
     public bool IconCacheEnabled { get; set; } = true;
+
+    /// <summary>
+    /// 本地性能打点开关（WD-033 / 8.6）：进程 CPU 采样与突发归因写入本地日志，
+    /// 不做任何网络上报。默认开启，供 8.1 全量回归；对稳态开销 <0.1%。
+    /// </summary>
+    public bool MetricsEnabled { get; set; } = true;
 }
 
 /// <summary>固定项；type = app | uwp | separator。</summary>

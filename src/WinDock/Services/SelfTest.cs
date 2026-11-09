@@ -280,8 +280,9 @@ public static class SelfTest
             Check("看门狗阈值夹紧与心跳间隔",
                 WatchdogProtocol.ClampTimeout(50) == 1000
                 && WatchdogProtocol.ClampTimeout(999999) == 60000
-                && WatchdogProtocol.HeartbeatIntervalMs(10000) == 2000
-                && WatchdogProtocol.HeartbeatIntervalMs(1000) == 333);
+                // WD-033：上限 2000 → 5000、除数 1/3 → 1/2，默认 10s 阈值心跳 2s → 5s
+                && WatchdogProtocol.HeartbeatIntervalMs(10000) == 5000
+                && WatchdogProtocol.HeartbeatIntervalMs(1000) == 500);
             Check("心跳 / 正常退出帧协议",
                 WatchdogProtocol.IsHeartbeat("H")
                 && WatchdogProtocol.IsShutdown("S")
@@ -304,7 +305,7 @@ public static class SelfTest
 
             using (var scheduler = new TimerScheduler(new SynchronizationContext()))
             using (var watchdog = new WatchdogService(log, scheduler,
-                Path.Combine(root, "missing-watchdog.exe")))
+                executable: Path.Combine(root, "missing-watchdog.exe")))
             {
                 watchdog.ApplyConfig(new DockConfig());
                 Check("看门狗 exe 缺失时安全降级", !watchdog.IsRunning);
@@ -319,6 +320,29 @@ public static class SelfTest
             Check("恢复提示英文资源",
                 Loc.Instance.T("Tray_RecoveryTitle") == "WinDock exited unexpectedly");
             Loc.Instance.SetLanguage("zh-CN");
+
+            // 21. WD-033 本地打点：计数/耗时聚合、Mark 不抛异常
+            using (var metrics = new MetricsService(log))
+            {
+                metrics.Count("test.count");
+                metrics.Count("test.count", 2);
+                metrics.Record("test.record", 4.5);
+                metrics.Record("test.record", 1.5);
+                IReadOnlyDictionary<string, MetricsStat> snapshot = metrics.Snapshot();
+                Check("打点计数聚合",
+                    snapshot.TryGetValue("test.count", out MetricsStat c) && c.Count == 3,
+                    $"实际 count={c.Count}");
+                Check("打点耗时聚合（n/total/max）",
+                    snapshot.TryGetValue("test.record", out MetricsStat r)
+                    && r.Count == 2 && Math.Abs(r.TotalMs - 6.0) < 0.01
+                    && Math.Abs(r.MaxMs - 4.5) < 0.01,
+                    $"实际 n={r.Count}, total={r.TotalMs}, max={r.MaxMs}");
+                metrics.Mark("selftest.mark"); // Mark 落 Info 日志，不抛异常即通过
+                Check("Mark 里程碑打点不抛异常", true);
+            }
+
+            // 22. 配置开关字段存在且默认开启
+            Check("MetricsEnabled 默认开启", new DockConfig().Behavior.MetricsEnabled);
         }
         catch (Exception ex)
         {

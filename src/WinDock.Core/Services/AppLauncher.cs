@@ -13,10 +13,12 @@ public sealed class AppLauncher : IAppLauncher
     private const string Module = "Launcher";
 
     private readonly ILogService _log;
+    private readonly IMetricsService? _metrics;
 
-    public AppLauncher(ILogService log)
+    public AppLauncher(ILogService log, IMetricsService? metrics = null)
     {
         _log = log;
+        _metrics = metrics;
     }
 
     public bool Launch(PinnedItem item)
@@ -74,6 +76,19 @@ public sealed class AppLauncher : IAppLauncher
     }
 
     public bool Activate(AppWindowInfo window)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            return ActivateCore(window);
+        }
+        finally
+        {
+            _metrics?.Record("launcher.activate", sw.Elapsed.TotalMilliseconds); // AC-21 点击激活时延
+        }
+    }
+
+    private bool ActivateCore(AppWindowInfo window)
     {
         IntPtr handle = window.Handle;
         for (int attempt = 1; attempt <= 3; attempt++)

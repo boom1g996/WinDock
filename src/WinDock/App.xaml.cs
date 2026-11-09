@@ -45,6 +45,9 @@ public partial class App : Application
     private IDockDragService? _drag;
     private IWatchdogService? _watchdog;
 
+    // M2 第五批：本地性能打点与 CPU 突发归因（WD-033）
+    private IMetricsService? _metrics;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -110,6 +113,15 @@ public partial class App : Application
         Loc.Instance.SetLanguage(_config.Current.General.Language);
         _log.Info("App", Loc.Instance.T("Log_Startup"));
 
+        // WD-033：本地打点（8.6 不上报）；1Hz CPU 采样跑在独立后台线程，
+        // 归因工具本身不唤醒 UI，避免污染被测对象。
+        _metrics = new MetricsService(_log);
+        _metrics.Mark("startup.config_loaded");
+        if (_config.Current.Behavior.MetricsEnabled)
+        {
+            _metrics.StartCpuSampler();
+        }
+
         _taskbar = new TaskbarInterop(_log);
         if (_taskbar.HasPendingRestore)
         {
@@ -118,19 +130,19 @@ public partial class App : Application
             _log.Warn("App", "检测到未恢复的任务栏快照，已自动恢复（崩溃兜底）");
         }
 
-        _enumerator = new WindowEnumerator(_log, SynchronizationContext.Current);
+        _enumerator = new WindowEnumerator(_log, SynchronizationContext.Current, _metrics);
         // WD-018：磁盘缓存按配置开关注入；关闭时退化为 M1 的纯内存缓存。
         IIconService icons = new IconService(_log,
             _config.Current.Behavior.IconCacheEnabled ? new IconCache(_log) : null);
         _animation = new AnimationEngine();
-        IAppLauncher launcher = new AppLauncher(_log);
+        IAppLauncher launcher = new AppLauncher(_log, _metrics);
         _preview = new PreviewService(_log);
         _guide = new StartupGuide(_config, _log);
         IDockDragService drag = new DockDragService(_config, _log);
         _drag = drag;
 
         _dock = new MainWindow(_config, _log, _taskbar, _enumerator,
-            icons, _animation, launcher);
+            icons, _animation, launcher, _metrics);
         _tray = new TrayService(_config, _log, _taskbar, _dock, OpenSettings, OpenGuide);
 
         // M2 组合根：所有新增能力按接口组装，模块之间不互相引用实现（需求 14.2）。
@@ -139,7 +151,7 @@ public partial class App : Application
         _dock.BindPreview(_preview, _timers);
         _dock.BindDrag(drag, _timers);
         _hotZone = new HotZone(_log);
-        _fullScreen = new FullScreenDetector(_log, _timers, SynchronizationContext.Current);
+        _fullScreen = new FullScreenDetector(_log, SynchronizationContext.Current, _metrics);
         _hotkey = new HotkeyService(_log);
         _autoHide = new AutoHideController(_log, _timers, _animation,
             _fullScreen, _hotZone, _dock);
@@ -159,12 +171,13 @@ public partial class App : Application
         _enumerator.Start();
         _dock.RefreshItems();
         _dock.Show(); // 触发 SourceInitialized → 注册 Ctrl+Alt+D
+        _metrics?.Mark("startup.first_show");
         _tray.ApplyConfig(_config.Current);
         StartupRegistry.Apply(_config.Current.General.LaunchAtStartup, _log);
         _fullScreen.Start();
 
         // WD-020：默认开启；exe 缺失时服务内部降级为关闭并写 WARN，不阻断 Dock。
-        _watchdog = new WatchdogService(_log, _timers);
+        _watchdog = new WatchdogService(_log, _timers, _metrics);
         _watchdog.ApplyConfig(_config.Current);
         _tray?.NotifyRecovery(); // 上次异常退出由看门狗留下的提示，读完即删
 
@@ -223,6 +236,7 @@ public partial class App : Application
         _tray?.Dispose();
         _enumerator?.Dispose();
         _animation?.Dispose();
+        _metrics?.Dispose(); // 最后停采样，退出前的清理工作也纳入归因
         _config?.Dispose();
         _log?.Info("App", Loc.Instance.T("Log_Exit"));
 

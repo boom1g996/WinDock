@@ -1,0 +1,87 @@
+{
+  "timestamp": "2026-11-09T18:47:06",
+  "exe": "D:\\workspace\\W&dock\\artifacts\\WinDock-framework-dependent\\DockHost.exe",
+  "cursor_original": [
+    602,
+    826
+  ],
+  "early_exit_code": null,
+  "pid": 31376,
+  "started_new_process": true,
+  "windows": [],
+  "visible_window_count": 0,
+  "dock_window_present": true,
+  "auto_hidden": true,
+  "hotzone_windows": [
+    {
+      "hwnd": 27265818,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1118,
+        1792,
+        1120
+      ],
+      "size": [
+        1792,
+        2
+      ],
+      "visible": false
+    }
+  ],
+  "settle_seconds": 10.0,
+  "cold_start_cpu_seconds": 0.75,
+  "sample_seconds": 30.0,
+  "idle_cpu_percent": 0.26,
+  "working_set_mb": 196.14,
+  "log_errors": [],
+  "log_tail": [
+    "[WindowEnum][INFO] 2026-11-09 18:47:08.124 事件钩子就绪，初始枚举已排队（后台线程）",
+    "[Dock][INFO] 2026-11-09 18:47:08.261 已尝试启用系统 Acrylic 背板（分层窗口下可能被系统忽略）",
+    "[Hotkey][INFO] 2026-11-09 18:47:08.265 全局快捷键 Ctrl+Alt+D 已注册",
+    "[Metrics][INFO] 2026-11-09 18:47:08.323 mark startup.first_show",
+    "[FullScreen][INFO] 2026-11-09 18:47:08.328 进入全屏/演示态（QUNS=1, rectHit=True），Dock 将隐藏并禁用热区",
+    "[AutoHide][INFO] 2026-11-09 18:47:08.334 全屏态：Dock 已立即隐藏，热区禁用",
+    "[Watchdog][INFO] 2026-11-09 18:47:08.375 看门狗已启动 pid=26588，阈值=10000ms，心跳间隔=5000ms",
+    "[Watchdog][INFO] 2026-11-09 18:47:08.505 启动：宿主 pid=31376，失联阈值=10000ms",
+    "[Metrics][INFO] 2026-11-09 18:47:09.938 cpu-spike window: 515.6ms/2s → ui.animation_frame×14, ui.rebuild_icons×2, enumerate.refresh×1, fullscreen.check×1, watchdog.heartbeat_write×1",
+    "[Metrics][INFO] 2026-11-09 18:47:37.932 cpu-spike window: 31.2ms/2s → enumerate.refresh×2",
+    "[Metrics][INFO] 2026-11-09 18:47:37.941 summary cpu=15.6ms/s | enumerate.refresh: n=3, total=85ms, max=82ms, fullscreen.check: n=5, total=16ms, max=13ms, ui.animation_frame: n=14, total=0ms, max=0ms, ui.rebuild_icons: n=2, total=13ms, max=8ms, watchdog.heartbeat_write: n=6, total=6ms, max=4ms",
+    "[Metrics][INFO] 2026-11-09 18:47:39.933 cpu-spike window: 31.2ms/2s → fullscreen.check×1, watchdog.heartbeat_write×1"
+  ],
+  "watchdog": {
+    "enabled": true,
+    "watchdog_pids_before": [
+      26588
+    ],
+    "recovery_before": null,
+    "recovery_after": {
+      "pid": 31376,
+      "reason": "pipe-closed",
+      "utc": "2026-11-09T10:47:48.1071072+00:00",
+      "taskbarRestored": true,
+      "snapshotPresent": false
+    },
+    "recovery_detected": true,
+    "recovery_reason": "pipe-closed",
+    "watchdog_pids_after_crash": [],
+    "watchdog_exited": true,
+    "log_has_recovery": true,
+    "clean_shutdown_pid": 9532,
+    "clean_watchdog_pids": [
+      34556
+    ],
+    "clean_dock_windows": 2,
+    "clean_exit_command": true,
+    "clean_shutdown_exited": true,
+    "clean_shutdown_no_recovery": true,
+    "clean_watchdog_exited": true
+  },
+  "watchdog_recovery_detected": true,
+  "watchdog_process_exited": true,
+  "watchdog_clean_shutdown": true,
+  "log_errors_late": [],
+  "verdict": "PASS",
+  "final_dock_pid": 21532
+}

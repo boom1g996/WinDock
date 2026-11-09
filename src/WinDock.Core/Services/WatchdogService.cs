@@ -19,6 +19,7 @@ public sealed class WatchdogService : IWatchdogService
 
     private readonly ILogService _log;
     private readonly ITimerScheduler _timers;
+    private readonly IMetricsService? _metrics;
     private readonly string _executable;
     private readonly string _pipeName;
 
@@ -30,10 +31,12 @@ public sealed class WatchdogService : IWatchdogService
     private bool _disposed;
 
     /// <param name="executable">看门狗 exe 路径；自检与发布用不同目录时可注入。</param>
-    public WatchdogService(ILogService log, ITimerScheduler timers, string? executable = null)
+    public WatchdogService(ILogService log, ITimerScheduler timers,
+        IMetricsService? metrics = null, string? executable = null)
     {
         _log = log;
         _timers = timers;
+        _metrics = metrics;
         _executable = executable ?? Path.Combine(AppContext.BaseDirectory, "WinDock.Watchdog.exe");
         _pipeName = WatchdogProtocol.PipeName(Environment.ProcessId);
     }
@@ -147,6 +150,7 @@ public sealed class WatchdogService : IWatchdogService
             return;
         }
 
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         try
         {
             writer.WriteLine(WatchdogProtocol.HeartbeatFrame);
@@ -155,6 +159,10 @@ public sealed class WatchdogService : IWatchdogService
         {
             _writer = null;
             _log.Warn(Module, $"心跳写入失败：{ex.Message}");
+        }
+        finally
+        {
+            _metrics?.Record("watchdog.heartbeat_write", sw.Elapsed.TotalMilliseconds);
         }
     }
 

@@ -38,6 +38,7 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     private readonly IIconService _icons;
     private readonly IAnimationEngine _animation;
     private readonly IAppLauncher _launcher;
+    private readonly IMetricsService? _metrics;
     private readonly List<DockIconControl> _iconControls = new();
     private DockConfig _current;
     private string _lastStructure = "";
@@ -59,7 +60,7 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
 
     public MainWindow(IConfigService config, ILogService log, ITaskbarInterop taskbar,
         IWindowEnumerator enumerator, IIconService icons, IAnimationEngine animation,
-        IAppLauncher launcher)
+        IAppLauncher launcher, IMetricsService? metrics = null)
     {
         InitializeComponent();
         _config = config;
@@ -69,6 +70,7 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         _icons = icons;
         _animation = animation;
         _launcher = launcher;
+        _metrics = metrics;
         _current = config.Current;
 
         _animation.Frame += OnAnimationFrame;
@@ -443,6 +445,7 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
 
     private void RenderIcons(List<DockItem> items)
     {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         _drag?.Cancel(); // 结构重建会销毁拖拽源控件
         ClosePreview(); // 结构重建会销毁悬停的图标控件，先注销缩略图
         IconsPanel.Children.Clear();
@@ -496,6 +499,7 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         }
 
         ClearHover();
+        _metrics?.Record("ui.rebuild_icons", sw.Elapsed.TotalMilliseconds);
     }
 
     private void OnIconEnter(DockIconControl control)
@@ -645,6 +649,7 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
 
     private void OnAnimationFrame(object? sender, AnimationFrameEventArgs e)
     {
+        _metrics?.Count("ui.animation_frame");
         if (!Dispatcher.CheckAccess())
         {
             Dispatcher.InvokeAsync(() => OnAnimationFrame(sender, e));

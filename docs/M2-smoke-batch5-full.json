@@ -1,0 +1,156 @@
+{
+  "timestamp": "2026-11-09T18:38:37",
+  "exe": "D:\\workspace\\W&dock\\artifacts\\WinDock-framework-dependent\\DockHost.exe",
+  "cursor_original": [
+    545,
+    278
+  ],
+  "early_exit_code": null,
+  "pid": 23632,
+  "started_new_process": true,
+  "windows": [
+    {
+      "hwnd": 2231336,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1118,
+        1792,
+        1120
+      ],
+      "size": [
+        1792,
+        2
+      ],
+      "visible": true
+    }
+  ],
+  "visible_window_count": 1,
+  "dock_window_present": true,
+  "auto_hidden": true,
+  "hotzone_windows": [
+    {
+      "hwnd": 2231336,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1118,
+        1792,
+        1120
+      ],
+      "size": [
+        1792,
+        2
+      ],
+      "visible": true
+    }
+  ],
+  "cursor_parked": [
+    10,
+    200
+  ],
+  "settle_seconds": 6.0,
+  "cold_start_cpu_seconds": 1.188,
+  "sample_seconds": 12.0,
+  "idle_cpu_percent": 0.26,
+  "working_set_mb": 210.98,
+  "log_errors": [],
+  "log_tail": [
+    "[App][INFO] 2026-11-09 18:38:38.323 WinDock 启动",
+    "[Metrics][INFO] 2026-11-09 18:38:38.334 mark startup.config_loaded",
+    "[Metrics][INFO] 2026-11-09 18:38:38.342 CPU 采样已启动：突发阈值=15ms/2s，汇总间隔=30s",
+    "[Icon][INFO] 2026-11-09 18:38:38.352 PrivateExtractIconsW 导出可用=True；磁盘缓存启用=True",
+    "[AutoHide][INFO] 2026-11-09 18:38:38.625 自动隐藏=True, 延迟=800ms, 全屏隐藏=True",
+    "[WindowEnum][INFO] 2026-11-09 18:38:38.629 事件钩子就绪，初始枚举已排队（后台线程）",
+    "[Dock][INFO] 2026-11-09 18:38:38.818 已尝试启用系统 Acrylic 背板（分层窗口下可能被系统忽略）",
+    "[Hotkey][INFO] 2026-11-09 18:38:38.820 全局快捷键 Ctrl+Alt+D 已注册",
+    "[Metrics][INFO] 2026-11-09 18:38:38.875 mark startup.first_show",
+    "[Watchdog][INFO] 2026-11-09 18:38:38.898 看门狗已启动 pid=17772，阈值=10000ms，心跳间隔=5000ms",
+    "[Watchdog][INFO] 2026-11-09 18:38:38.987 启动：宿主 pid=23632，失联阈值=10000ms",
+    "[Metrics][INFO] 2026-11-09 18:38:40.354 cpu-spike window: 921.9ms/2s → ui.animation_frame×70, ui.rebuild_icons×2, enumerate.refresh×1, fullscreen.check×1, watchdog.heartbeat_write×1"
+  ],
+  "preview_dock_visible_before_hover": true,
+  "preview_window_present": true,
+  "preview_window_rect": [
+    630,
+    878,
+    820,
+    1032
+  ],
+  "preview_hover_point": [
+    741,
+    1067
+  ],
+  "preview_closed_on_leave": true,
+  "drag": {
+    "enabled": true,
+    "seeded_pinned": true,
+    "pinned_before": [
+      "SmokeA",
+      "SmokeB",
+      "SmokeC"
+    ],
+    "dock_rect": [
+      561,
+      986,
+      1231,
+      1112
+    ],
+    "drag_points": [
+      [
+        623,
+        1067
+      ],
+      [
+        748,
+        1067
+      ]
+    ],
+    "pinned_after": [
+      "SmokeB",
+      "SmokeC",
+      "SmokeA"
+    ],
+    "order_changed": true,
+    "log_has_drag": true,
+    "config_restored": true
+  },
+  "drag_order_changed": true,
+  "watchdog": {
+    "enabled": true,
+    "watchdog_pids_before": [
+      17772
+    ],
+    "recovery_before": null,
+    "recovery_after": {
+      "pid": 23632,
+      "reason": "pipe-closed",
+      "utc": "2026-11-09T10:39:05.3276956+00:00",
+      "taskbarRestored": true,
+      "snapshotPresent": false
+    },
+    "recovery_detected": true,
+    "recovery_reason": "pipe-closed",
+    "watchdog_pids_after_crash": [],
+    "watchdog_exited": true,
+    "log_has_recovery": true,
+    "clean_shutdown_pid": 31376,
+    "clean_watchdog_pids": [
+      31076
+    ],
+    "clean_dock_windows": 2,
+    "clean_exit_command": true,
+    "clean_shutdown_exited": true,
+    "clean_shutdown_no_recovery": true,
+    "clean_watchdog_exited": true
+  },
+  "watchdog_recovery_detected": true,
+  "watchdog_process_exited": true,
+  "watchdog_clean_shutdown": true,
+  "log_errors_late": [],
+  "verdict": "PASS",
+  "final_dock_pid": 5544,
+  "cursor_restored": true
+}

@@ -48,9 +48,15 @@ public static class WatchdogProtocol
         ConfigRanges.WatchdogHeartbeatMs.Min,
         ConfigRanges.WatchdogHeartbeatMs.Max);
 
-    /// <summary>心跳间隔取失联阈值的 1/3，保证三次机会内必有数据。</summary>
+    /// <summary>
+    /// 心跳间隔取失联阈值的 1/2（下限 500ms、上限 5s）。
+    /// WD-033 实测（归因数据）：每次 UI 线程唤醒都会被进程 CPU 记账
+    /// 计一个 15.6ms 刻度，2s 心跳 + 3s 全屏兜底把稳态推到 ~0.6%（K-13）。
+    /// 默认 10s 阈值 → 5s 心跳：失联判定语义不变（连续 10s 无帧即恢复，
+    /// 一帧丢失仍有 5s 余量），UI 唤醒从 15 次/30s 降到 6 次/30s。
+    /// </summary>
     public static int HeartbeatIntervalMs(int timeoutMs) =>
-        Math.Clamp(ClampTimeout(timeoutMs) / 3, 300, 2000);
+        Math.Clamp(ClampTimeout(timeoutMs) / 2, 500, 5000);
 
     /// <summary>宿主 PID 存活检查周期：进程被强杀时远快于 10s 即可恢复（4.4 要求 5s）。</summary>
     public static int PollIntervalMs => 500;

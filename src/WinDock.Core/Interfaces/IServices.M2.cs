@@ -139,13 +139,32 @@ public interface IWatchdogService : IDisposable
     void Heartbeat();
 }
 
-/// <summary>本地性能打点：冷启动、点击激活 P95、悬停首帧、帧率（8.1 / WD-033）。</summary>
-public interface IMetricsService
+/// <summary>
+/// 本地性能打点（8.1 / WD-033 / 8.6 不上报）：冷启动、点击激活时延、悬停首帧、
+/// 各子系统耗时与次数；内置 1Hz 进程 CPU 采样，突发时输出「该窗口内各指标计数」
+/// 的归因行，用于定位稳态 CPU 周期性突发的来源（K-11 / K-13）。
+/// 全部写入本地日志，无任何网络上报。
+/// </summary>
+public interface IMetricsService : IDisposable
 {
+    /// <summary>里程碑打点（如 cold_start / first_frame），Mark 之间可换算时延。</summary>
     void Mark(string checkpoint);
+
+    /// <summary>计数型指标（次数）：animation.frame、watchdog.heartbeat、fullscreen.check 等。</summary>
+    void Count(string metric, long delta = 1);
+
+    /// <summary>耗时型指标（毫秒）：enumerate.refresh、ui.rebuild_icons、icon.extract 等。</summary>
     void Record(string metric, double milliseconds);
-    IReadOnlyDictionary<string, double> Snapshot();
+
+    /// <summary>汇总：metric → (count, totalMs, maxMs)，自检断言用。</summary>
+    IReadOnlyDictionary<string, MetricsStat> Snapshot();
+
+    /// <summary>启动 1Hz CPU 采样与突发归因（默认关闭，回归测试时开启）。</summary>
+    void StartCpuSampler(int spikeThresholdMs = 15, int summaryIntervalS = 30);
 }
+
+/// <summary>单个指标的累计统计。</summary>
+public readonly record struct MetricsStat(long Count, double TotalMs, double MaxMs);
 
 /// <summary>
 /// 全局唯一的延时调度器（M2 设计决策 D3）：所有 500ms 悬停、800ms 隐藏、
