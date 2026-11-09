@@ -31,6 +31,8 @@ public sealed class AutoHideController : IAutoHideController
     private bool _inFullScreen;
     private int _hideDelayMs = 800;
     private int _slideDurationMs = 180;
+    private readonly HashSet<string> _holds = new(StringComparer.Ordinal);
+    private bool Held => _holds.Count > 0;
     private bool _disposed;
 
     public AutoHideController(ILogService log, ITimerScheduler timers,
@@ -71,7 +73,7 @@ public sealed class AutoHideController : IAutoHideController
         }
 
         SyncHotZone();
-        if (_enabled && !IsHidden && !_inFullScreen && !_host.IsPointerOverDock)
+        if (_enabled && !Held && !IsHidden && !_inFullScreen && !_host.IsPointerOverDock)
         {
             // FR-601 默认开：冷启动时鼠标通常不在 Dock 上，不能等一次
             // MouseEnter/MouseLeave 才生效，否则自动隐藏形同虚设。
@@ -108,9 +110,9 @@ public sealed class AutoHideController : IAutoHideController
 
     public void Hide(bool force = false)
     {
-        if (_disposed || IsHidden)
+        if (_disposed || IsHidden || (Held && !force))
         {
-            return;
+            return; // 浮层交互期间抑制自动隐藏；全屏强制隐藏不受影响
         }
 
         if (!force && _host.IsPointerOverDock)
@@ -138,6 +140,48 @@ public sealed class AutoHideController : IAutoHideController
         {
             Hide(force: true);
         }
+    }
+
+    public void SetHeld(string reason, bool held)
+    {
+        if (_disposed || string.IsNullOrWhiteSpace(reason))
+        {
+            return;
+        }
+
+        bool before = Held;
+        if (held)
+        {
+            _holds.Add(reason);
+        }
+        else
+        {
+            _holds.Remove(reason);
+        }
+
+        bool after = Held;
+        if (before == after)
+        {
+            return; // 引用计数未跨过 0 边界：不打断其他仍打开的浮层
+        }
+
+        _timers.Cancel(DelayKey);
+        if (after)
+        {
+            if (!_inFullScreen)
+            {
+                Show(); // 浮层打开时保证 Dock 常驻可见
+            }
+        }
+        else if (_enabled && !IsHidden && !_inFullScreen && !_host.IsPointerOverDock)
+        {
+            // 最后一个浮层关闭且鼠标仍在别处：重新按 HideDelayMs 计时，不立即滑出。
+            _timers.Schedule(DelayKey, Math.Max(0, _hideDelayMs), () => Hide());
+        }
+
+        _log.Info(Module, after
+            ? $"浮层打开（{reason}）：暂停自动隐藏"
+            : "浮层全部关闭：恢复自动隐藏");
     }
 
     public void Dispose()
@@ -195,7 +239,7 @@ public sealed class AutoHideController : IAutoHideController
 
     private void OnPointerLeft(object? sender, EventArgs args)
     {
-        if (!_enabled || IsHidden || _inFullScreen)
+        if (!_enabled || IsHidden || _inFullScreen || Held)
         {
             return;
         }

@@ -1,0 +1,123 @@
+{
+  "timestamp": "2026-11-09T16:53:10",
+  "exe": "D:\\workspace\\W&dock\\artifacts\\WinDock-framework-dependent\\DockHost.exe",
+  "cursor_original": [
+    -1561,
+    699
+  ],
+  "guide_replayed": true,
+  "early_exit_code": null,
+  "pid": 31300,
+  "started_new_process": true,
+  "windows": [
+    {
+      "hwnd": 39324282,
+      "class": "HwndWrapper[DockHost;;4451a70d-9815-4613-908c-97d3c4885f96]",
+      "title": "WinDock Guide",
+      "rect": [
+        -1335,
+        283,
+        -735,
+        733
+      ],
+      "size": [
+        600,
+        450
+      ],
+      "visible": true
+    },
+    {
+      "hwnd": 4459300,
+      "class": "HwndWrapper[DockHost;;3157b3b7-5216-4b78-9814-01ab4fbbb2dc]",
+      "title": "",
+      "rect": [
+        656,
+        986,
+        1137,
+        1112
+      ],
+      "size": [
+        481,
+        126
+      ],
+      "visible": true
+    }
+  ],
+  "visible_window_count": 2,
+  "dock_window_present": true,
+  "auto_hidden": false,
+  "hotzone_windows": [
+    {
+      "hwnd": 4590336,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1118,
+        1792,
+        1120
+      ],
+      "size": [
+        1792,
+        2
+      ],
+      "visible": false
+    }
+  ],
+  "guide_window_present": true,
+  "guide_window_rect": [
+    -1335,
+    283,
+    -735,
+    733
+  ],
+  "guide_dismiss_fallback": "WM_CLOSE",
+  "guide_dismissed": true,
+  "guide_dismissed_by_escape": true,
+  "guide_first_run_completed": true,
+  "cursor_parked": [
+    10,
+    200
+  ],
+  "settle_seconds": 8.0,
+  "cold_start_cpu_seconds": 2.625,
+  "cpu_trace_percent_per_5s": [
+    0.312,
+    0.312,
+    0.312,
+    0.312
+  ],
+  "sample_seconds": 20.0,
+  "idle_cpu_percent": 0.312,
+  "working_set_mb": 234.83,
+  "log_errors": [],
+  "log_tail": [
+    "[App][INFO] 2026-11-09 16:53:11.356 WinDock 启动",
+    "[Icon][INFO] 2026-11-09 16:53:11.371 PrivateExtractIconsW 导出可用=True；磁盘缓存启用=True",
+    "[AutoHide][INFO] 2026-11-09 16:53:11.638 自动隐藏=True, 延迟=800ms, 全屏隐藏=True",
+    "[WindowEnum][INFO] 2026-11-09 16:53:11.722 事件钩子就绪，初始聚合 7 个应用",
+    "[Dock][INFO] 2026-11-09 16:53:11.941 已尝试启用系统 Acrylic 背板（分层窗口下可能被系统忽略）",
+    "[Hotkey][INFO] 2026-11-09 16:53:11.948 全局快捷键 Ctrl+Alt+D 已注册",
+    "[AutoHide][INFO] 2026-11-09 16:53:12.017 浮层打开（guide）：暂停自动隐藏",
+    "[Guide][INFO] 2026-11-09 16:53:12.441 首次启动引导已显示",
+    "[Dock][INFO] 2026-11-09 16:53:14.751 已尝试启用系统 Acrylic 背板（分层窗口下可能被系统忽略）",
+    "[AutoHide][INFO] 2026-11-09 16:53:14.758 自动隐藏=True, 延迟=800ms, 全屏隐藏=True",
+    "[Guide][INFO] 2026-11-09 16:53:14.773 首次引导已跳过",
+    "[AutoHide][INFO] 2026-11-09 16:53:14.779 浮层全部关闭：恢复自动隐藏"
+  ],
+  "preview_dock_visible_before_hover": true,
+  "preview_window_present": true,
+  "preview_window_rect": [
+    630,
+    878,
+    820,
+    1032
+  ],
+  "preview_hover_point": [
+    741,
+    1067
+  ],
+  "preview_closed_on_leave": true,
+  "verdict": "PASS",
+  "cursor_restored": true
+}

@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text;
 using System.Threading;
+using System.Windows;
 using WinDock.Core;
 using WinDock.Core.Interfaces;
 using WinDock.Core.Models;
@@ -144,7 +145,74 @@ public static class SelfTest
                 Check("TimerScheduler 取消生效", !cancelled);
             }
 
-            // 8. 中英资源
+            // 8. WD-014：缩略图几何（纯函数，保持源宽高比并居中留边）
+            Rect box = new(0, 0, 160, 90);
+            Rect fitted = PreviewService.FitRect(box, 1920, 1080);
+            Check("缩略图按源比例铺满目标",
+                Math.Abs(fitted.Width - 160) < 0.001
+                && Math.Abs(fitted.Height - 90) < 0.001
+                && Math.Abs(fitted.Left) < 0.001
+                && Math.Abs(fitted.Top) < 0.001,
+                $"rect={fitted}");
+            Rect tall = PreviewService.FitRect(box, 600, 1200);
+            Check("竖屏源不拉伸且居中留边",
+                Math.Abs(tall.Width - 45) < 0.001
+                && Math.Abs(tall.Height - 90) < 0.001
+                && Math.Abs(tall.Left - 57.5) < 0.001,
+                $"rect={tall}");
+
+            // 9. WD-014：上限夹紧、无宿主时不注册、Hide 清空条目
+            using (var preview = new PreviewService(log))
+            {
+                var clamp = new DockConfig();
+                clamp.Behavior.PreviewMaxWindows = 99;
+                ConfigService.Normalize(clamp, new List<string>());
+                preview.ApplyConfig(clamp);
+                Check("缩略图上限夹紧到 6", preview.MaxThumbnails == 6,
+                    $"实际={preview.MaxThumbnails}");
+
+                var targets = Enumerable.Range(1, 9)
+                    .Select(i => new WindowPreviewTarget(new IntPtr(i), $"W{i}", false))
+                    .ToList();
+                int registered = preview.Show(IntPtr.Zero, targets);
+                Check("无宿主 HWND 不注册且条目截断到上限",
+                    registered == 0 && preview.ActiveCount == 6,
+                    $"registered={registered}, active={preview.ActiveCount}");
+                preview.Hide();
+                Check("Hide 清空全部缩略图条目", preview.ActiveCount == 0,
+                    $"active={preview.ActiveCount}");
+            }
+
+            // 10. WD-017：首次引导判定与标记持久化
+            Check("默认配置需要显示首次引导",
+                StartupGuide.NeedsGuide(new DockConfig()));
+            string guideDir = NewCase(root, "guide");
+            using (var service = new ConfigService(log, guideDir))
+            {
+                DockConfig done = service.Current;
+                done.General.FirstRunCompleted = true;
+                service.Save(done);
+            }
+
+            using (var reread = new ConfigService(log, guideDir))
+            {
+                Check("引导完成标记持久化",
+                    !StartupGuide.NeedsGuide(reread.Current));
+            }
+
+            // 11. 新增本地化键中英齐备
+            Loc.Instance.SetLanguage("zh-CN");
+            Check("预览/引导中文资源齐备",
+                Loc.Instance.T("Guide_S1_Title") == "欢迎使用 WinDock"
+                && Loc.Instance.T("Preview_Minimized") == "已最小化");
+            Loc.Instance.SetLanguage("en");
+            Check("预览/引导英文资源齐备",
+                Loc.Instance.T("Guide_S1_Title") == "Welcome to WinDock"
+                && Loc.Instance.T("Preview_Minimized") == "Minimized",
+                $"实际={Loc.Instance.T("Guide_S1_Title")}");
+            Loc.Instance.SetLanguage("zh-CN");
+
+            // 12. 中英资源
             Loc.Instance.SetLanguage("zh-CN");
             Check("中文资源可用",
                 Loc.Instance.T("AppName") == "WinDock"

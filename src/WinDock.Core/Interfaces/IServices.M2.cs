@@ -18,6 +18,10 @@ public interface IPreviewService : IDisposable
 {
     bool IsAvailable { get; }
     int MaxThumbnails { get; }
+    /// <summary>当前面板条目数（自检 / 打点用）。</summary>
+    int ActiveCount { get; }
+    /// <summary>配置热更新：缩略图上限变化立即释放多余句柄。</summary>
+    void ApplyConfig(DockConfig config);
     /// <summary>在宿主窗口上注册缩略图；返回成功注册数量，超出上限的窗口被忽略。</summary>
     int Show(IntPtr host, IReadOnlyList<WindowPreviewTarget> targets);
     /// <summary>按面板布局更新每个缩略图的目标矩形（设备像素）。</summary>
@@ -35,6 +39,12 @@ public interface IAutoHideController : IDisposable
     void Show();
     /// <summary>force=true 用于托盘手动隐藏 / 全屏强制隐藏，忽略鼠标仍停留在 Dock 上。</summary>
     void Hide(bool force = false);
+    /// <summary>
+    /// 临时抑制自动隐藏（WD-014 缩略图面板 / WD-017 引导窗口打开期间）。
+    /// 鼠标已离开 Dock 但用户仍在与这些浮层交互，此时滑出会造成面板与 Dock 脱节。
+    /// 按 reason 引用计数，多个浮层可叠加，最后一个关闭才恢复自动隐藏。
+    /// </summary>
+    void SetHeld(string reason, bool held);
     void Toggle();
     event EventHandler<bool>? VisibilityChanged;
 }
@@ -93,6 +103,8 @@ public interface IDockDragService
 /// <summary>首次启动 3 步引导（WD-017）；默认模式 C，不隐藏原生任务栏。</summary>
 public interface IStartupGuide
 {
+    /// <summary>引导窗口当前是否显示（托盘重复点击时用于幂等判断）。</summary>
+    bool IsVisible { get; }
     bool ShouldShow(DockConfig config);
     void Show(Action onCompleted);
 }

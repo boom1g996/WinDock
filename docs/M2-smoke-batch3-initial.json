@@ -1,0 +1,88 @@
+{
+  "timestamp": "2026-11-09T16:41:01",
+  "exe": "D:\\workspace\\W&dock\\artifacts\\WinDock-framework-dependent\\DockHost.exe",
+  "guide_replayed": true,
+  "early_exit_code": null,
+  "pid": 33680,
+  "started_new_process": true,
+  "windows": [
+    {
+      "hwnd": 1641262,
+      "class": "HwndWrapper[DockHost;;f2e1c873-1912-4ab9-9c2f-79cc708bbac0]",
+      "title": "",
+      "rect": [
+        656,
+        986,
+        1137,
+        1112
+      ],
+      "size": [
+        481,
+        126
+      ],
+      "visible": true
+    }
+  ],
+  "visible_window_count": 1,
+  "dock_window_present": true,
+  "auto_hidden": false,
+  "hotzone_windows": [
+    {
+      "hwnd": 9570414,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1118,
+        1792,
+        1120
+      ],
+      "size": [
+        1792,
+        2
+      ],
+      "visible": false
+    }
+  ],
+  "guide_window_present": false,
+  "guide_window_rect": null,
+  "guide_already_completed": true,
+  "settle_seconds": 6.0,
+  "cold_start_cpu_seconds": 3.141,
+  "cpu_trace_percent_per_5s": [
+    31.562,
+    22.812
+  ],
+  "sample_seconds": 10.0,
+  "idle_cpu_percent": 27.187,
+  "working_set_mb": 288.31,
+  "log_errors": [],
+  "log_tail": [
+    "[WindowEnum][INFO] 2026-11-09 16:41:03.703 事件钩子就绪，初始聚合 7 个应用",
+    "[Dock][INFO] 2026-11-09 16:41:03.927 已尝试启用系统 Acrylic 背板（分层窗口下可能被系统忽略）",
+    "[Hotkey][INFO] 2026-11-09 16:41:03.931 全局快捷键 Ctrl+Alt+D 已注册",
+    "[AutoHide][INFO] 2026-11-09 16:41:04.019 浮层打开（guide）：暂停自动隐藏",
+    "[Preview][INFO] 2026-11-09 16:41:06.451 预览面板打开：条目=1, DWM 注册=0, 上限=6",
+    "[Preview][INFO] 2026-11-09 16:41:09.441 预览面板打开：条目=1, DWM 注册=1, 上限=6",
+    "[Preview][INFO] 2026-11-09 16:41:10.071 预览面板打开：条目=1, DWM 注册=0, 上限=6",
+    "[Preview][INFO] 2026-11-09 16:41:11.501 预览面板打开：条目=1, DWM 注册=0, 上限=6",
+    "[Preview][INFO] 2026-11-09 16:41:12.752 预览面板打开：条目=1, DWM 注册=1, 上限=6",
+    "[Preview][INFO] 2026-11-09 16:41:13.782 预览面板打开：条目=1, DWM 注册=1, 上限=6",
+    "[Preview][INFO] 2026-11-09 16:41:14.821 预览面板打开：条目=1, DWM 注册=0, 上限=6",
+    "[Preview][INFO] 2026-11-09 16:41:15.758 预览面板打开：条目=1, DWM 注册=1, 上限=6"
+  ],
+  "preview_dock_visible_before_hover": true,
+  "preview_window_present": true,
+  "preview_window_rect": [
+    687,
+    878,
+    877,
+    1032
+  ],
+  "preview_hover_point": [
+    741,
+    1067
+  ],
+  "preview_closed_on_leave": true,
+  "verdict": "PASS"
+}

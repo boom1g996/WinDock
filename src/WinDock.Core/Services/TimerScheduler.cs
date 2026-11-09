@@ -15,12 +15,14 @@ public sealed class TimerScheduler : ITimerScheduler
     private readonly Dictionary<string, (DateTime DueUtc, Action Action)> _pending =
         new(StringComparer.Ordinal);
     private readonly SynchronizationContext? _context;
+    private readonly ILogService? _log;
     private readonly Timer _timer;
     private bool _disposed;
 
-    public TimerScheduler(SynchronizationContext? context = null)
+    public TimerScheduler(SynchronizationContext? context = null, ILogService? log = null)
     {
         _context = context ?? SynchronizationContext.Current;
+        _log = log;
         _timer = new Timer(OnTick, null, Timeout.Infinite, Timeout.Infinite);
     }
 
@@ -122,15 +124,17 @@ public sealed class TimerScheduler : ITimerScheduler
         }
     }
 
-    private static void Run(Action action)
+    private void Run(Action action)
     {
         try
         {
             action();
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // 单个回调失败不应阻断后续到期任务；业务异常由调用方自行记录日志。
+            // 单个回调失败不应阻断后续到期任务，但也绝不能静默吞掉：
+            // M2 第三批曾因引导窗口构造异常被吞，导致功能失效而日志无线索。
+            _log?.Error("Timer", "延时任务执行异常", ex);
         }
     }
 }

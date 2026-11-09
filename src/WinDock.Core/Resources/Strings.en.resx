@@ -56,4 +56,29 @@
   <data name="Log_Exit" xml:space="preserve"><value>WinDock exiting</value></data>
   <data name="Log_TaskbarRestored" xml:space="preserve"><value>Windows taskbar restored</value></data>
   <data name="Log_Unhandled" xml:space="preserve"><value>Unhandled exception; logged and taskbar restore attempted</value></data>
+  <data name="Preview_WindowCount" xml:space="preserve"><value>{0} windows</value></data>
+  <data name="Preview_Minimized" xml:space="preserve"><value>Minimized</value></data>
+  <data name="Preview_Untitled" xml:space="preserve"><value>Untitled window</value></data>
+  <data name="Tray_Guide" xml:space="preserve"><value>First-run guide...</value></data>
+  <data name="Guide_S1_Title" xml:space="preserve"><value>Welcome to WinDock</value></data>
+  <data name="Guide_S1_Text" xml:space="preserve"><value>WinDock shows a macOS-style floating Dock at the bottom of the screen for launching, switching and managing your apps. This version never hides or modifies the native Windows taskbar and never changes system files. You can exit at any time from the tray icon.</value></data>
+  <data name="Guide_S2_Title" xml:space="preserve"><value>Choose how the taskbar coexists</value></data>
+  <data name="Guide_S2_Text" xml:space="preserve"><value>There are three approaches. This version defaults to, and only enables, Beautify for the best compatibility.</value></data>
+  <data name="Guide_S2_Hint" xml:space="preserve"><value>The other two modes require hiding or moving the native taskbar and have not been verified on real hardware; they stay disabled for this milestone.</value></data>
+  <data name="Guide_Mode_Beautify" xml:space="preserve"><value>Beautify (recommended): keep the taskbar, add a floating Dock</value></data>
+  <data name="Guide_Mode_Coexist" xml:space="preserve"><value>Coexist: taskbar and Dock both visible (not enabled)</value></data>
+  <data name="Guide_Mode_Replace" xml:space="preserve"><value>Replace: hide the native taskbar (not enabled)</value></data>
+  <data name="Guide_S3_Title" xml:space="preserve"><value>Pick a starting look</value></data>
+  <data name="Guide_S3_Text" xml:space="preserve"><value>Icon size, corner radius, opacity and magnification can be changed later in Settings and apply instantly.</value></data>
+  <data name="Guide_Preset_Simple" xml:space="preserve"><value>Minimal</value></data>
+  <data name="Guide_Preset_Classic" xml:space="preserve"><value>Classic</value></data>
+  <data name="Guide_Preset_Clear" xml:space="preserve"><value>Clear</value></data>
+  <data name="Guide_Step" xml:space="preserve"><value>Step {0} of 3</value></data>
+  <data name="Guide_Back" xml:space="preserve"><value>Back</value></data>
+  <data name="Guide_Next" xml:space="preserve"><value>Next</value></data>
+  <data name="Guide_Start" xml:space="preserve"><value>Get started</value></data>
+  <data name="Guide_Skip" xml:space="preserve"><value>Skip</value></data>
+  <data name="Settings_PreviewEnabled" xml:space="preserve"><value>Show window previews on hover</value></data>
+  <data name="Settings_ReplayGuide" xml:space="preserve"><value>Show guide on next start</value></data>
+  <data name="Settings_GuideScheduled" xml:space="preserve"><value>Done. The first-run guide will appear the next time WinDock starts.</value></data>
 </root>

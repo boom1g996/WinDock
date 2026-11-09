@@ -60,7 +60,12 @@
             </GroupBox>
 
             <GroupBox x:Name="BehaviorGroup" Padding="10">
-                <CheckBox x:Name="StartupCheckBox" Margin="0,4" />
+                <StackPanel>
+                    <CheckBox x:Name="StartupCheckBox" Margin="0,4" />
+                    <CheckBox x:Name="PreviewCheckBox" Margin="0,4" />
+                    <Button x:Name="GuideButton" HorizontalAlignment="Left"
+                            Margin="0,10,0,4" Padding="10,4" />
+                </StackPanel>
             </GroupBox>
 
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,4">

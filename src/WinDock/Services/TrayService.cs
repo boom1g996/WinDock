@@ -17,18 +17,20 @@ public sealed class TrayService : IDisposable
     private readonly ITaskbarInterop _taskbar;
     private readonly MainWindow _dock;
     private readonly Action _openSettings;
+    private readonly Action _openGuide;
     private readonly WinForms.NotifyIcon _icon;
     private readonly WinForms.ContextMenuStrip _menu;
     private readonly WinForms.ToolStripMenuItem _toggleItem;
 
     public TrayService(IConfigService config, ILogService log, ITaskbarInterop taskbar,
-        MainWindow dock, Action openSettings)
+        MainWindow dock, Action openSettings, Action openGuide)
     {
         _config = config;
         _log = log;
         _taskbar = taskbar;
         _dock = dock;
         _openSettings = openSettings;
+        _openGuide = openGuide;
 
         _menu = new WinForms.ContextMenuStrip();
         _toggleItem = Item("Dock_Hide", ToggleDock);
@@ -36,6 +38,7 @@ public sealed class TrayService : IDisposable
         _menu.Items.Add(Item("Tray_RestoreTaskbar", RestoreTaskbar));
         _menu.Items.Add(new WinForms.ToolStripSeparator());
         _menu.Items.Add(Item("Tray_Settings", () => _openSettings()));
+        _menu.Items.Add(Item("Tray_Guide", () => _openGuide()));
         _menu.Items.Add(Item("Tray_Exit", () => System.Windows.Application.Current.Shutdown()));
 
         _icon = new WinForms.NotifyIcon

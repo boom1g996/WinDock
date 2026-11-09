@@ -38,8 +38,11 @@ public partial class MainWindow : Window
         MagnifySlider.ValueChanged += (_, _) => OnValueChanged();
         StartupCheckBox.Checked += (_, _) => OnValueChanged();
         StartupCheckBox.Unchecked += (_, _) => OnValueChanged();
+        PreviewCheckBox.Checked += (_, _) => OnValueChanged();
+        PreviewCheckBox.Unchecked += (_, _) => OnValueChanged();
 
         ResetButton.Click += (_, _) => ResetToDefaults();
+        GuideButton.Click += (_, _) => ScheduleGuideReplay();
         LogButton.Click += (_, _) => OpenLogFolder();
         CloseButton.Click += (_, _) => Close();
         Closed += (_, _) => _saveTimer?.Dispose();
@@ -59,6 +62,8 @@ public partial class MainWindow : Window
         OpacityLabel.Text = Loc.Instance.T("Settings_Opacity");
         MagnifyLabel.Text = Loc.Instance.T("Settings_MagnifyScale");
         StartupCheckBox.Content = Loc.Instance.T("Settings_LaunchAtStartup");
+        PreviewCheckBox.Content = Loc.Instance.T("Settings_PreviewEnabled");
+        GuideButton.Content = Loc.Instance.T("Settings_ReplayGuide");
 
         ResetButton.Content = Loc.Instance.T("Settings_Reset");
         LogButton.Content = Loc.Instance.T("Settings_OpenLog");
@@ -75,6 +80,7 @@ public partial class MainWindow : Window
         OpacitySlider.Value = config.Appearance.Opacity * 100;
         MagnifySlider.Value = config.Animation.MagnifyScale;
         StartupCheckBox.IsChecked = config.General.LaunchAtStartup;
+        PreviewCheckBox.IsChecked = config.Behavior.PreviewEnabled;
         _loading = false;
         UpdateLabelsAndPreview();
     }
@@ -93,6 +99,7 @@ public partial class MainWindow : Window
         config.Appearance.Opacity = OpacitySlider.Value / 100.0;
         config.Animation.MagnifyScale = MagnifySlider.Value;
         config.General.LaunchAtStartup = StartupCheckBox.IsChecked == true;
+        config.Behavior.PreviewEnabled = PreviewCheckBox.IsChecked == true;
 
         UpdateLabelsAndPreview();
         ScheduleSave();
@@ -145,6 +152,25 @@ public partial class MainWindow : Window
                 _log.Error(Module, "保存配置失败", ex);
             }
         }), null, 150, Timeout.Infinite);
+    }
+
+    /// <summary>设置 firstRunCompleted=false，下次启动由组合根重新弹出 3 步引导。</summary>
+    private void ScheduleGuideReplay()
+    {
+        _saveTimer?.Dispose();
+        try
+        {
+            DockConfig config = _config.Current;
+            config.General.FirstRunCompleted = false;
+            _config.Save(config);
+            MessageBox.Show(this, Loc.Instance.T("Settings_GuideScheduled"),
+                Loc.Instance.T("Settings_Title"), MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            _log.Error(Module, "安排重新查看引导失败", ex);
+        }
     }
 
     private void ResetToDefaults()

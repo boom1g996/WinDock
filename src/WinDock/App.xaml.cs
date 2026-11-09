@@ -17,6 +17,8 @@ namespace WinDock;
 public partial class App : Application
 {
     private const string MutexName = "WinDock.DockHost.SingleInstance.v1";
+    private const string GuideHoldReason = "guide";
+    private const string GuideShowKey = "guide.show";
 
     private Mutex? _mutex;
     private ILogService? _log;
@@ -33,6 +35,10 @@ public partial class App : Application
     private IHotZone? _hotZone;
     private IAutoHideController? _autoHide;
     private IHotkeyService? _hotkey;
+
+    // M2 第三批：窗口缩略图预览 / 首次启动引导
+    private IPreviewService? _preview;
+    private IStartupGuide? _guide;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -77,14 +83,17 @@ public partial class App : Application
             _config.Current.Behavior.IconCacheEnabled ? new IconCache(_log) : null);
         _animation = new AnimationEngine();
         IAppLauncher launcher = new AppLauncher(_log);
+        _preview = new PreviewService(_log);
+        _guide = new StartupGuide(_config, _log);
 
         _dock = new MainWindow(_config, _log, _taskbar, _enumerator,
             icons, _animation, launcher);
-        _tray = new TrayService(_config, _log, _taskbar, _dock, OpenSettings);
+        _tray = new TrayService(_config, _log, _taskbar, _dock, OpenSettings, OpenGuide);
 
         // M2 组合根：所有新增能力按接口组装，模块之间不互相引用实现（需求 14.2）。
         // 延时只走这一个 TimerScheduler，动效只走这一个 AnimationEngine（M2 D3）。
-        _timers = new TimerScheduler(SynchronizationContext.Current);
+        _timers = new TimerScheduler(SynchronizationContext.Current, _log);
+        _dock.BindPreview(_preview, _timers);
         _hotZone = new HotZone(_log);
         _fullScreen = new FullScreenDetector(_log, _timers, SynchronizationContext.Current);
         _hotkey = new HotkeyService(_log);
@@ -109,6 +118,37 @@ public partial class App : Application
         _tray.ApplyConfig(_config.Current);
         StartupRegistry.Apply(_config.Current.General.LaunchAtStartup, _log);
         _fullScreen.Start();
+
+        if (_guide?.ShouldShow(_config.Current) == true)
+        {
+            // 冷启动 350ms 后弹引导；期间 Hold 住 Dock，避免被 800ms 自动隐藏抢先滑出。
+            _autoHide?.SetHeld(GuideHoldReason, true);
+            _timers.Schedule(GuideShowKey, 350, ShowGuide);
+        }
+    }
+
+    /// <summary>显示引导窗口；按 reason 引用计数 Hold，完成后可靠释放。</summary>
+    private void ShowGuide()
+    {
+        if (_guide is null || _autoHide is null)
+        {
+            return;
+        }
+
+        _autoHide.SetHeld(GuideHoldReason, true);
+        _guide.Show(() => _autoHide.SetHeld(GuideHoldReason, false));
+    }
+
+    /// <summary>托盘「首次引导…」：随时可重新查看，不要求重置配置。</summary>
+    private void OpenGuide()
+    {
+        if (_guide is null || _autoHide is null || _guide.IsVisible)
+        {
+            return;
+        }
+
+        _timers?.Cancel(GuideShowKey);
+        ShowGuide();
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -124,6 +164,7 @@ public partial class App : Application
         }
 
         _autoHide?.Dispose();
+        _preview?.Dispose(); // FR-404：退出时兜底注销全部 DWM 缩略图句柄
         _fullScreen?.Dispose();
         _hotkey?.Dispose();
         _hotZone?.Dispose();

@@ -1,0 +1,84 @@
+{
+  "timestamp": "2026-11-09T16:55:21",
+  "exe": "D:\\workspace\\W&dock\\artifacts\\WinDock-framework-dependent\\DockHost.exe",
+  "cursor_original": [
+    -1561,
+    699
+  ],
+  "early_exit_code": null,
+  "pid": 12916,
+  "started_new_process": true,
+  "windows": [
+    {
+      "hwnd": 4721408,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1118,
+        1792,
+        1120
+      ],
+      "size": [
+        1792,
+        2
+      ],
+      "visible": true
+    }
+  ],
+  "visible_window_count": 1,
+  "dock_window_present": true,
+  "auto_hidden": true,
+  "hotzone_windows": [
+    {
+      "hwnd": 4721408,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1118,
+        1792,
+        1120
+      ],
+      "size": [
+        1792,
+        2
+      ],
+      "visible": true
+    }
+  ],
+  "cursor_parked": [
+    10,
+    200
+  ],
+  "settle_seconds": 10.0,
+  "cold_start_cpu_seconds": 1.016,
+  "cpu_trace_percent_per_5s": [
+    0.0,
+    0.312,
+    10.0,
+    0.0,
+    1.562,
+    0.0
+  ],
+  "sample_seconds": 30.0,
+  "idle_cpu_percent": 1.979,
+  "working_set_mb": 212.23,
+  "log_errors": [],
+  "log_tail": [
+    "[App][INFO] 2026-11-09 16:54:12.336 WinDock 启动",
+    "[Icon][INFO] 2026-11-09 16:54:12.349 PrivateExtractIconsW 导出可用=True；磁盘缓存启用=True",
+    "[AutoHide][INFO] 2026-11-09 16:54:12.608 自动隐藏=True, 延迟=800ms, 全屏隐藏=True",
+    "[WindowEnum][INFO] 2026-11-09 16:54:12.685 事件钩子就绪，初始聚合 7 个应用",
+    "[Dock][INFO] 2026-11-09 16:54:12.873 已尝试启用系统 Acrylic 背板（分层窗口下可能被系统忽略）",
+    "[Hotkey][INFO] 2026-11-09 16:54:12.882 全局快捷键 Ctrl+Alt+D 已注册",
+    "[App][INFO] 2026-11-09 16:55:21.980 WinDock 启动",
+    "[Icon][INFO] 2026-11-09 16:55:21.993 PrivateExtractIconsW 导出可用=True；磁盘缓存启用=True",
+    "[AutoHide][INFO] 2026-11-09 16:55:22.250 自动隐藏=True, 延迟=800ms, 全屏隐藏=True",
+    "[WindowEnum][INFO] 2026-11-09 16:55:22.329 事件钩子就绪，初始聚合 7 个应用",
+    "[Dock][INFO] 2026-11-09 16:55:22.491 已尝试启用系统 Acrylic 背板（分层窗口下可能被系统忽略）",
+    "[Hotkey][INFO] 2026-11-09 16:55:22.493 全局快捷键 Ctrl+Alt+D 已注册"
+  ],
+  "verdict": "PASS",
+  "cursor_restored": true
+}

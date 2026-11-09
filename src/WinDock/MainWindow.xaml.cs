@@ -22,6 +22,10 @@ namespace WinDock;
 public partial class MainWindow : Window, IDockWindowHost
 {
     private const string Module = "Dock";
+    private const string PreviewOpenKey = "preview.open";
+    private const string PreviewCloseKey = "preview.close";
+    private const string PreviewHoldReason = "preview";
+    private const int PreviewCloseDelayMs = 300;
 
     private readonly IConfigService _config;
     private readonly ILogService _log;
@@ -38,9 +42,14 @@ public partial class MainWindow : Window, IDockWindowHost
     // 滑动只改 _slideOffset，动画数值全部来自 IAnimationEngine 单一时间轴。
     private IAutoHideController? _autoHide;
     private IHotkeyService? _hotkey;
+    private IPreviewService? _preview;
+    private ITimerScheduler? _timers;
+    private PreviewWindow? _previewWindow;
+    private string? _previewGroupKey;
     private double _baseTop;
     private double _slideOffset;
     private bool _pointerOver;
+    private bool _animationsPaused;
 
     public MainWindow(IConfigService config, ILogService log, ITaskbarInterop taskbar,
         IWindowEnumerator enumerator, IIconService icons, IAnimationEngine animation,
@@ -69,7 +78,24 @@ public partial class MainWindow : Window, IDockWindowHost
     public bool IsDockVisible { get; private set; } = true;
 
     /// <summary>全屏/演示模式下暂停图标动效，但保留滑入滑出（FR-603 / D7）。</summary>
-    public bool AnimationsPaused { get; set; }
+    public bool AnimationsPaused
+    {
+        get => _animationsPaused;
+        set
+        {
+            if (_animationsPaused == value)
+            {
+                return;
+            }
+
+            _animationsPaused = value;
+            if (value)
+            {
+                // 全屏时缩略图会盖在独占应用上；立即注销 DWM 句柄（D7 / R7）。
+                ClosePreview();
+            }
+        }
+    }
 
     /// <summary>组合根在窗口显示前绑定自动隐藏与快捷键，避免可见性状态竞态。</summary>
     public void BindAutoHide(IAutoHideController autoHide, IHotkeyService hotkey)
@@ -77,6 +103,14 @@ public partial class MainWindow : Window, IDockWindowHost
         _autoHide = autoHide;
         _hotkey = hotkey;
         autoHide.ApplyConfig(_current);
+    }
+
+    /// <summary>组合根注入 WD-014 预览服务与唯一延时调度器（M2 D3）。</summary>
+    public void BindPreview(IPreviewService preview, ITimerScheduler timers)
+    {
+        _preview = preview;
+        _timers = timers;
+        preview.ApplyConfig(_current);
     }
 
     public void ShowDock()
@@ -95,6 +129,7 @@ public partial class MainWindow : Window, IDockWindowHost
     public void HideDock()
     {
         IsDockVisible = false;
+        ClosePreview();
         ClearHover();
         if (_autoHide is not null)
         {
@@ -129,6 +164,11 @@ public partial class MainWindow : Window, IDockWindowHost
     public void SetVisible(bool visible)
     {
         IsDockVisible = visible;
+        if (!visible)
+        {
+            ClosePreview();
+        }
+
         Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -137,6 +177,7 @@ public partial class MainWindow : Window, IDockWindowHost
     private void OnRootMouseEnter(object sender, MouseEventArgs e)
     {
         _pointerOver = true;
+        _timers?.Cancel(PreviewCloseKey); // 从预览面板移回 Dock：取消关闭倒计时
         PointerEntered?.Invoke(this, EventArgs.Empty);
     }
 
@@ -154,6 +195,14 @@ public partial class MainWindow : Window, IDockWindowHost
             }
 
             ClearHover();
+            if (_previewWindow?.IsOpen == true)
+            {
+                // 面板 Show 会改变 Z 序并可能瞬时触发一次 MouseLeave。
+                // 延后做一次「联合区域复核」，而不是直接关面板，否则会形成
+                // 打开→关闭→再打开的 ~1s 循环（实机冒烟曾把空闲 CPU 推到 27%）。
+                _timers?.Schedule(PreviewCloseKey, PreviewCloseDelayMs, VerifyPreviewLeave);
+            }
+
             PointerLeft?.Invoke(this, EventArgs.Empty);
         }));
     }
@@ -185,6 +234,12 @@ public partial class MainWindow : Window, IDockWindowHost
             reduced,
             config.Animation.Decay);
         _animation.ConfigureMotion(config.Animation.IndicatorFadeMs, 180);
+
+        _preview?.ApplyConfig(config);
+        if (!config.Behavior.PreviewEnabled)
+        {
+            ClosePreview(); // 设置窗口关掉预览：立即注销句柄，不等下一次悬停
+        }
 
         // 尺寸 / 间距 / 形状变化必须重建可视化树，强制结构签名失效。
         _lastStructure = "";
@@ -332,6 +387,7 @@ public partial class MainWindow : Window, IDockWindowHost
 
     private void RenderIcons(List<DockItem> items)
     {
+        ClosePreview(); // 结构重建会销毁悬停的图标控件，先注销缩略图
         IconsPanel.Children.Clear();
         _iconControls.Clear();
         DockConfig config = _current;
@@ -393,12 +449,139 @@ public partial class MainWindow : Window, IDockWindowHost
         int index = _iconControls.IndexOf(control);
         _animation.SetHover(index, _iconControls.Count,
             _current.Dock.IconSize, _current.Dock.IconSpacing);
+        SchedulePreview(control);
     }
 
     private void ClearHover()
     {
         _animation.SetHover(null, _iconControls.Count,
             _current.Dock.IconSize, _current.Dock.IconSpacing);
+    }
+
+    // ---- WD-014 缩略图预览（FR-401~404） --------------------------------
+
+    /// <summary>悬停后延迟打开；延时只走唯一 ITimerScheduler，不新增 Timer（D3）。</summary>
+    private void SchedulePreview(DockIconControl control)
+    {
+        if (_preview is null || _timers is null)
+        {
+            return;
+        }
+
+        _timers.Cancel(PreviewCloseKey);
+        _timers.Cancel(PreviewOpenKey);
+        if (!_current.Behavior.PreviewEnabled
+            || control.Item.Group is not { Windows.Count: > 0 } group)
+        {
+            if (_previewWindow?.IsOpen == true)
+            {
+                _timers.Schedule(PreviewCloseKey, PreviewCloseDelayMs, ClosePreview);
+            }
+
+            return;
+        }
+
+        int delay = Math.Clamp(_current.Behavior.PreviewHoverDelayMs,
+            ConfigRanges.PreviewHoverDelayMs.Min, ConfigRanges.PreviewHoverDelayMs.Max);
+        _timers.Schedule(PreviewOpenKey, delay, () => OpenPreview(control, group));
+    }
+
+    private void OpenPreview(DockIconControl control, AppWindowGroup group)
+    {
+        if (_preview is null || _timers is null || !IsDockVisible
+            || !_iconControls.Contains(control) || AnimationsPaused
+            || !_current.Behavior.PreviewEnabled)
+        {
+            return;
+        }
+
+        if (_previewWindow is { IsOpen: true }
+            && string.Equals(_previewGroupKey, group.Key, StringComparison.Ordinal))
+        {
+            // 同一分组的重复 MouseEnter（图标放大抖动）不重建面板，只取消关闭倒计时。
+            _timers.Cancel(PreviewCloseKey);
+            return;
+        }
+
+        List<WindowPreviewTarget> targets = group.Windows
+            .Take(_preview.MaxThumbnails)
+            .Select(w => new WindowPreviewTarget(w.Handle, w.Title, w.IsMinimized))
+            .ToList();
+        if (targets.Count == 0)
+        {
+            return;
+        }
+
+        if (_previewWindow is not null)
+        {
+            // 切换图标：先注销上一组句柄；WPF Window 关闭后不可复用，直接换新实例。
+            _previewWindow.ClosePanel();
+            _previewWindow = null;
+        }
+
+        _autoHide?.SetHeld(PreviewHoldReason, true);
+
+        var panel = new PreviewWindow(_preview, _launcher, _log);
+        panel.HoverEntered += (_, _) => _timers.Cancel(PreviewCloseKey);
+        panel.HoverLeft += (_, _) =>
+            _timers.Schedule(PreviewCloseKey, PreviewCloseDelayMs, VerifyPreviewLeave);
+        panel.ThumbnailActivated += (_, _) => ClosePreview();
+        _previewWindow = panel;
+        _previewGroupKey = group.Key;
+
+        Point physical = control.PointToScreen(new Point(control.ActualWidth / 2, 0));
+        Matrix fromDevice = PresentationSource.FromVisual(control)?
+            .CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
+        panel.Open(control.Item.DisplayName, targets, fromDevice.Transform(physical));
+    }
+
+    /// <summary>
+    /// 预览面板的离开判定：只有鼠标同时离开 Dock 与面板才关闭。
+    /// 单次/双层复核，且**不重新调度自己**，避免「打开→关闭→再打开」循环
+    /// （M2 第三批实机冒烟：该循环曾把空闲 CPU 推到 27%）。
+    /// </summary>
+    private void VerifyPreviewLeave()
+    {
+        if (_previewWindow is not { IsOpen: true } panel)
+        {
+            return;
+        }
+
+        if (Root.IsMouseOver || panel.IsPointerOver)
+        {
+            return;
+        }
+
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            if (!ReferenceEquals(_previewWindow, panel) || !panel.IsOpen
+                || Root.IsMouseOver || panel.IsPointerOver)
+            {
+                return;
+            }
+
+            ClosePreview();
+        }));
+    }
+
+    /// <summary>幂等关闭：注销全部 DWM 句柄并解除自动隐藏抑制。</summary>
+    private void ClosePreview()
+    {
+        _timers?.Cancel(PreviewOpenKey);
+        _timers?.Cancel(PreviewCloseKey);
+        PreviewWindow? panel = _previewWindow;
+        _previewWindow = null;
+        _previewGroupKey = null;
+        if (panel is not null)
+        {
+            panel.ClosePanel();
+        }
+        else
+        {
+            _preview?.Hide();
+        }
+
+        _autoHide?.SetHeld(PreviewHoldReason, false);
     }
 
     private void OnAnimationFrame(object? sender, AnimationFrameEventArgs e)
