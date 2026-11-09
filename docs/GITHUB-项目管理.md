@@ -39,6 +39,24 @@
 
 ## 4. 日常工作流
 
+### 4.0 凭据设置（前置，只做一次）
+
+**生成 PAT**：GitHub → Settings → Developer settings → Personal access tokens → **Tokens (classic)** → Generate new token (classic)。Note 填 `WinDock-sync`，Expiration 建议 7~30 天，勾选 **`repo`** + **`project`**（本脚本不需要 `workflow`），生成后立刻复制（只显示一次）。
+
+**设为用户级持久环境变量**：本工作区每条命令都由独立新进程执行，会话级 `$env:GITHUB_TOKEN = ...` 在下一个进程会丢失，因此必须写用户级变量。在**你自己电脑的 PowerShell** 执行（`-AsSecureString` 保证输入不回显、不进命令历史）：
+
+```powershell
+$sec = Read-Host -AsSecureString "粘贴新 PAT"
+[Environment]::SetEnvironmentVariable(
+  "GITHUB_TOKEN",
+  [System.Net.NetworkCredential]::new("", $sec).PlainPassword,
+  "User")
+```
+
+助手会从注册表读取该值并注入同步进程，token 不打印、不写入仓库、不进 `.git/config`。若不想写注册表，也可把单行 token 存到**仓库外**的文件（如 `C:\Users\83892\.windock-github-token`）并告知路径，用完即删。
+
+> **不要在聊天里贴 token**：GitHub 会对公开泄露的 token 自动 revoke，本轮 `401 Bad credentials` 即由此引发。
+
 ### 4.1 新增或调整任务
 
 1. 编辑 `docs/BACKLOG.md` 的 Issues 表格（列顺序固定：ID / 标题 / Milestone / 优先级 / Labels / 依赖 / 验收 / 状态）。
@@ -46,11 +64,12 @@
 3. 同步到 GitHub：
 
 ```powershell
-$env:GITHUB_TOKEN = "<classic PAT, 需 repo + project>"
+# 凭据按 §4.0 预先设为用户级环境变量；如在当前终端直接跑，先注入一次：
+$env:GITHUB_TOKEN = [Environment]::GetEnvironmentVariable("GITHUB_TOKEN", "User")
 python tools/create_github_project.py --project-number 1
 ```
 
-脚本会：跳过同名议题 → 新建增量议题 → 把全部 35+ 条重新挂看板（已存在的跳过）→ 补齐 Status / Priority。**不要在聊天里贴 token。**
+脚本会：跳过同名议题 → 新建增量议题 → 把全部 35+ 条重新挂看板（已存在的跳过）→ 补齐 Status / Priority。若由助手代跑，token 由助手从注册表读出后注入，无需出现在命令里。
 
 ### 4.2 推进状态
 
