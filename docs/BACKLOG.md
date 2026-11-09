@@ -1,8 +1,8 @@
 # WinDock Backlog · GitHub 项目看板导入清单
 
 - 目标看板：`https://github.com/users/boom1g996/projects/1`
-- 生成日期：2026-11-09　|　数据源：`需求文档.md` v1.0 第 11 章 + `M1-设计说明与任务拆解.md`
-- 状态：**待导入**。账号 `boom1g996` 目前 0 个公开仓库，看板匿名访问 404，需 PAT 后由 `tools/create_github_project.py` 一键灌入。
+- 生成日期：2026-11-09　|　数据源：`需求文档.md` v1.0 第 11 章 + `M1-设计说明与任务拆解.md` + `M2-设计说明与任务拆解.md`
+- 状态：**WD-M0-01~WD-032 已导入**（35 议题 / 35 看板卡片）；WD-033~036 为 M2 新增，待 `M2-设计说明与任务拆解.md` §6 六条默认值确认后增量导入。
 - 编号规则：`WD-xxx` 为全局唯一任务号；M0 已完成项以 `done` 标记，导入后直接关闭。
 
 ---
@@ -60,10 +60,14 @@
 | WD-030 | 文件夹固定与拖入添加 | M4 增强 | P2 | module:icon,type:feature | WD-016 | FR-303 | todo |
 | WD-031 | 配置导入导出 | M4 增强 | P2 | module:config,type:feature | WD-002 | 6.14 | todo |
 | WD-032 | Dock 侧最小化反馈动效 | M4 增强 | P2 | module:animation,type:feature | WD-019 | 按 6.9 降级方案，不劫持系统动画 | todo |
+| WD-033 | 内置打点与第 8.1 表全量回归 | M2 体验完善 | P0 | type:test | WD-014~020 | AC-20/21/22；需求 14.5 超标必须修复后提交 | todo |
+| WD-034 | 托盘去 WinForms 化与内存复核 | M2 体验完善 | P0 | module:settings,type:feature | WD-011 | AC-20 内存 ≤120MB；禁用硬件加速凑数不允许 | todo |
+| WD-035 | 长稳实证（1 天 + 72h） | M2 体验完善 | P0 | type:test | WD-033 | 8.2；24h 内存增长 ≤5MB；补齐 M1 遗留 K-08 | todo |
+| WD-036 | M2 交付物（安装包 + 变更说明 + 已知问题） | M2 体验完善 | P0 | type:chore | WD-014~035 | 需求第 11 章里程碑交付约束 | todo |
 
 ## 4. 导入约定
 
 1. Issue 标题格式：`WD-xxx 标题`（不带额外前缀，符合团队命名习惯）。
-2. Issue body 由脚本按「依赖 / 验收 / 来源」三段生成，并回链到 `docs/M0-技术预研报告.md` 与 `docs/M1-设计说明与任务拆解.md`。
+2. Issue body 由脚本按「依赖 / 验收 / 来源」三段生成，并回链到 `docs/M0-技术预研报告.md`、`docs/M1-设计说明与任务拆解.md` 与 `docs/M2-设计说明与任务拆解.md`。
 3. `done` 状态的 M0 项创建后立即 close。
 4. 看板列建议：`Backlog` → `Todo` → `In Progress` → `In Review` → `Done`；`risk:system-api` 标签单独建视图，便于回归时重点盯。
