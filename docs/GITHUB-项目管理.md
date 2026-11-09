@@ -73,4 +73,5 @@ API 方式通过 Git Data API 逐个重放本地提交（blob → tree → commi
 2. **GitHub MCP 连接器**：当前授权为只读 GitHub App，`create_repository` 返回 `403 Resource not accessible by integration`；写操作一律走 PAT 脚本。
 3. **PAT 安全**：脚本不打印、不落盘 token；`git push` 用 `GIT_CONFIG_*` 环境变量注入认证头，不写 `.git/config`。曾明文出现过的 PAT 应撤销并轮换。
 4. **提交 SHA 不一致**：API 重放会按服务端时间重新生成 commit 对象，远端与本地的 commit SHA 不同（内容、顺序、message 一致）。因此将来即使网络恢复，也不要直接 `git push`（会被判为分叉）；继续用 `--push-api` 增量同步，或在可直连的机器上重新 clone 后以远端为准。
-5. **未开工项**：M1 代码尚未编写，等待 `docs/M1-设计说明与任务拆解.md` §5 的 6 条默认值批复（按默认即可开工 WD-001~013）。
+5. **凭据状态（2026-11-09 更新）**：此前在会话中明文出现的 classic PAT 已失效，`GET /repos/boom1g996/WinDock` 返回 **401 Bad credentials**（GitHub 会对公开泄露的 token 自动撤销，也可能已被手动轮换）。**M1 代码提交 `53c0868` 目前只在本地**，远端 `main` 仍停在上一轮同步的历史。恢复步骤：新建 classic PAT（`repo` + `project`）→ 设为 `GITHUB_TOKEN` 环境变量（不要在聊天里贴）→ `python tools/create_github_project.py --push-api`。**不要重复尝试旧 token**；401 是确定性失败，不是限流或临时故障。
+6. **M1 状态**：设计说明 §5 六条默认值已获用户「按默认」确认，WD-001~013 代码已落地；交付清单与 10 项已知问题见 `docs/M1-变更说明与已知问题.md`。看板 M1 卡片状态暂未改为 Done：M1 出口标准「可日常使用 1 天不崩」尚未实跑实证（K-08），不宜提前标完成。
