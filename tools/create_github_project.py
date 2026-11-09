@@ -16,6 +16,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -100,6 +101,113 @@ class GitHub:
             body = exc.read().decode("utf-8", "replace")
             raise RuntimeError(f"{method} {path} -> HTTP {exc.code}: {body[:400]}") from exc
 
+    def graphql(self, query: str, variables: dict) -> dict:
+        result = self.call("POST", "/graphql", {"query": query, "variables": variables})
+        if result.get("errors"):
+            raise RuntimeError(f"GraphQL errors: {result['errors']}")
+        return result["data"]
+
+
+PROJECT_QUERY = """
+query($owner: String!, $number: Int!) {
+  user(login: $owner) {
+    projectV2(number: $number) {
+      id title public
+      fields(first: 30) {
+        nodes {
+          ... on ProjectV2Field { id name }
+          ... on ProjectV2SingleSelectField { id name options { id name } }
+        }
+      }
+    }
+  }
+}
+"""
+
+ADD_ITEM_MUTATION = """
+mutation($projectId: ID!, $contentId: ID!) {
+  addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
+    item { id }
+  }
+}
+"""
+
+SET_STATUS_MUTATION = """
+mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
+  updateProjectV2ItemFieldValue(input: {
+    projectId: $projectId, itemId: $itemId, fieldId: $fieldId,
+    value: {singleSelectOptionId: $optionId}
+  }) { projectV2Item { id } }
+}
+"""
+
+
+def attach_to_project(gh: "GitHub", owner: str, number: int, items: list[tuple[dict, str]]) -> None:
+    """Add issues to a user-level Projects v2 board and set Status when possible.
+
+    Requires `read:project` + `write:project` on a classic PAT, or the
+    equivalent fine-grained 'Projects' read/write permission.
+    """
+    data = gh.graphql(PROJECT_QUERY, {"owner": owner, "number": number})
+    project = (data.get("user") or {}).get("projectV2")
+    if not project:
+        print(f"  ! Project #{number} not visible to this token; skipping board linking.")
+        return
+    print(f"  Project: {project['title']} (public={project['public']}, id={project['id']})")
+
+    status_field = None
+    for field in project["fields"]["nodes"]:
+        if field and field.get("name", "").lower() == "status" and field.get("options"):
+            status_field = field
+            break
+
+    for issue, desired_status in items:
+        try:
+            added = gh.graphql(ADD_ITEM_MUTATION, {
+                "projectId": project["id"], "contentId": issue["node_id"],
+            })
+            item_id = added["addProjectV2ItemById"]["item"]["id"]
+        except RuntimeError as exc:
+            if "already exists" in str(exc).lower() or "already" in str(exc).lower():
+                continue
+            print(f"  ! add item for #{issue['number']}: {exc}")
+            continue
+        if status_field:
+            option = next(
+                (o for o in status_field["options"] if o["name"].lower() == desired_status.lower()),
+                None,
+            )
+            if option:
+                try:
+                    gh.graphql(SET_STATUS_MUTATION, {
+                        "projectId": project["id"], "itemId": item_id,
+                        "fieldId": status_field["id"], "optionId": option["id"],
+                    })
+                except RuntimeError as exc:
+                    print(f"  ! set status for #{issue['number']}: {exc}")
+        print(f"  + board item #{issue['number']} -> {desired_status}")
+
+
+def push_local_repo(token: str, owner: str, repo: str) -> None:
+    """Push the local git repository without persisting the token in .git/config."""
+    url = f"https://github.com/{owner}/{repo}.git"
+    check = subprocess.run(["git", "-C", str(ROOT), "remote", "get-url", "origin"],
+                           capture_output=True, text=True)
+    action = "set-url" if check.returncode == 0 else "add"
+    subprocess.run(["git", "-C", str(ROOT), "remote", action, "origin", url], check=True)
+    env = os.environ.copy()
+    # Pass credentials via environment-scoped git config: no token in argv or .git/config.
+    env["GIT_CONFIG_COUNT"] = "1"
+    env["GIT_CONFIG_KEY_0"] = "http.extraHeader"
+    env["GIT_CONFIG_VALUE_0"] = f"AUTHORIZATION: bearer {token}"
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), "push", "-u", "origin", "HEAD:main"],
+        capture_output=True, text=True, env=env, timeout=180,
+    )
+    print(result.stdout.strip())
+    if result.returncode != 0:
+        raise RuntimeError(f"git push failed: {result.stderr.strip()[:500]}")
+
 
 def main() -> int:
     ap = argparse.ArgumentParser()
@@ -109,10 +217,18 @@ def main() -> int:
     ap.add_argument("--create-repo", action="store_true", help="create the repository if missing")
     ap.add_argument("--private", action="store_true")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--project-owner", default="boom1g996",
+                    help="owner of the user-level Projects v2 board")
+    ap.add_argument("--project-number", type=int, default=0,
+                    help="Projects v2 number to link issues into; 0 = skip board linking")
+    ap.add_argument("--push-local", action="store_true",
+                    help="also push the local git repository to origin/main")
     args = ap.parse_args()
 
     milestones, issues = parse_backlog()
     print(f"Parsed: {len(milestones)} milestones, {len(issues)} issues, {len(LABELS)} labels")
+    print(f"Plan: repo={args.owner}/{args.repo}, board=#{args.project_number or 'off'}, "
+          f"push_local={args.push_local}")
     if args.dry_run:
         for m in milestones:
             print(f"  MILESTONE  {m['title']}")
@@ -143,13 +259,13 @@ def main() -> int:
         })
         print(f"Created repository {owner}/{repo}.")
 
-    existing_titles = set()
+    existing: dict[str, dict] = {}
     page = 1
     while True:
         batch = gh.call("GET", f"{base}/issues?state=all&per_page=100&page={page}")
         if not batch:
             break
-        existing_titles.update(x["title"] for x in batch)
+        existing.update({x["title"]: x for x in batch})
         if len(batch) < 100:
             break
         page += 1
@@ -187,25 +303,38 @@ def main() -> int:
         "- `docs/M1-设计说明与任务拆解.md`\n"
     )
     created_count = 0
+    board_items: list[tuple[dict, str]] = []
     for i in issues:
-        if i["title"] in existing_titles:
-            continue
-        labels = list(dict.fromkeys(i["labels"] + [i["priority"]]))
-        payload = {
-            "title": i["title"],
-            "body": body_template.format(**i),
-            "labels": labels,
-        }
-        number = milestone_numbers.get(i["milestone"])
-        if number:
-            payload["milestone"] = number
-        result = gh.call("POST", f"{base}/issues", payload)
-        if i["state"] == "done":
-            gh.call("PATCH", f"{base}/issues/{result['number']}", {"state": "closed"})
-        created_count += 1
-        print(f"  + issue #{result['number']} {i['title']} ({i['state']})")
+        target = existing.get(i["title"])
+        if target is None:
+            labels = list(dict.fromkeys(i["labels"] + [i["priority"]]))
+            payload = {
+                "title": i["title"],
+                "body": body_template.format(**i),
+                "labels": labels,
+            }
+            number = milestone_numbers.get(i["milestone"])
+            if number:
+                payload["milestone"] = number
+            target = gh.call("POST", f"{base}/issues", payload)
+            if i["state"] == "done":
+                gh.call("PATCH", f"{base}/issues/{target['number']}", {"state": "closed"})
+            created_count += 1
+            print(f"  + issue #{target['number']} {i['title']} ({i['state']})")
+        board_items.append((target, "Done" if i["state"] == "done" else "Todo"))
 
     print(f"Done. Created {created_count} new issues in {owner}/{repo}.")
+    if args.project_number:
+        try:
+            attach_to_project(gh, args.project_owner, args.project_number, board_items)
+        except RuntimeError as exc:
+            print(f"  ! board linking failed (issues were still created): {exc}")
+    if args.push_local:
+        try:
+            push_local_repo(args.token, owner, repo)
+            print("  + pushed local repository to origin/main")
+        except (RuntimeError, subprocess.SubprocessError) as exc:
+            print(f"  ! push failed (issues were still created): {exc}")
     return 0
 
 
