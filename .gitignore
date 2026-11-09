@@ -14,3 +14,6 @@ logs/
 # Never commit credentials
 .env
 *token*.txt
+
+# WorkBuddy workspace data (local memory / session artifacts)
+.workbuddy/
