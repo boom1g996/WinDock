@@ -3,21 +3,24 @@
 This is a project-management helper, not part of the WinDock product.
 
     python tools/create_github_project.py --dry-run
-    python tools/create_github_project.py --token <PAT> --repo WinDock --create-repo
+    python tools/create_github_project.py --create-repo --project-number 1 --push-local
 
 The token is read from --token or the GITHUB_TOKEN environment variable and is
-never printed or written to disk. Requires scopes: repo (public_repo is enough
-for a public repo). Project v2 board columns are managed in the GitHub UI;
-this script creates the issues that you then add to the board.
+never printed or written to disk. Requires scopes: repo + project. Reruns are
+idempotent (existing issues are skipped, board items are re-linked safely).
+If git push cannot reach github.com, --push-local automatically falls back to
+replaying local commits through the Git Data API on api.github.com.
 """
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import os
 import re
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -142,8 +145,9 @@ mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $optionId: String!) {
 """
 
 
-def attach_to_project(gh: "GitHub", owner: str, number: int, items: list[tuple[dict, str]]) -> None:
-    """Add issues to a user-level Projects v2 board and set Status when possible.
+def attach_to_project(gh: "GitHub", owner: str, number: int,
+                     items: list[tuple[dict, str, str]]) -> None:
+    """Add issues to a user-level Projects v2 board; set Status + Priority.
 
     Requires `read:project` + `write:project` on a classic PAT, or the
     equivalent fine-grained 'Projects' read/write permission.
@@ -155,37 +159,58 @@ def attach_to_project(gh: "GitHub", owner: str, number: int, items: list[tuple[d
         return
     print(f"  Project: {project['title']} (public={project['public']}, id={project['id']})")
 
-    status_field = None
-    for field in project["fields"]["nodes"]:
-        if field and field.get("name", "").lower() == "status" and field.get("options"):
-            status_field = field
-            break
+    def find_field(name: str) -> dict | None:
+        return next(
+            (f for f in project["fields"]["nodes"]
+             if f and f.get("name", "").lower() == name and f.get("options")),
+            None,
+        )
 
-    for issue, desired_status in items:
+    status_field = find_field("status")
+    priority_field = find_field("priority")
+
+    def mutate(query: str, variables: dict) -> dict:
+        # Light throttle + one backoff on GitHub secondary rate limits.
+        for attempt in range(3):
+            time.sleep(0.15)
+            try:
+                return gh.graphql(query, variables)
+            except RuntimeError as exc:
+                if "rate limit" in str(exc).lower() and attempt < 2:
+                    time.sleep(5 * (attempt + 1))
+                    continue
+                raise
+        raise RuntimeError("GraphQL mutation exhausted retries")
+
+    def set_option(field: dict | None, issue_number: int, item_id: str,
+                   value: str, label: str) -> None:
+        if not field:
+            return
+        option = next((o for o in field["options"] if o["name"].lower() == value.lower()), None)
+        if not option:
+            return
         try:
-            added = gh.graphql(ADD_ITEM_MUTATION, {
+            mutate(SET_STATUS_MUTATION, {
+                "projectId": project["id"], "itemId": item_id,
+                "fieldId": field["id"], "optionId": option["id"],
+            })
+        except RuntimeError as exc:
+            print(f"  ! set {label} for #{issue_number}: {exc}")
+
+    for issue, desired_status, priority in items:
+        try:
+            added = mutate(ADD_ITEM_MUTATION, {
                 "projectId": project["id"], "contentId": issue["node_id"],
             })
             item_id = added["addProjectV2ItemById"]["item"]["id"]
         except RuntimeError as exc:
-            if "already exists" in str(exc).lower() or "already" in str(exc).lower():
+            if "already" in str(exc).lower():
                 continue
             print(f"  ! add item for #{issue['number']}: {exc}")
             continue
-        if status_field:
-            option = next(
-                (o for o in status_field["options"] if o["name"].lower() == desired_status.lower()),
-                None,
-            )
-            if option:
-                try:
-                    gh.graphql(SET_STATUS_MUTATION, {
-                        "projectId": project["id"], "itemId": item_id,
-                        "fieldId": status_field["id"], "optionId": option["id"],
-                    })
-                except RuntimeError as exc:
-                    print(f"  ! set status for #{issue['number']}: {exc}")
-        print(f"  + board item #{issue['number']} -> {desired_status}")
+        set_option(status_field, issue["number"], item_id, desired_status, "Status")
+        set_option(priority_field, issue["number"], item_id, priority, "Priority")
+        print(f"  + board item #{issue['number']} -> {desired_status} / {priority}")
 
 
 def push_local_repo(token: str, owner: str, repo: str) -> None:
@@ -200,13 +225,88 @@ def push_local_repo(token: str, owner: str, repo: str) -> None:
     env["GIT_CONFIG_COUNT"] = "1"
     env["GIT_CONFIG_KEY_0"] = "http.extraHeader"
     env["GIT_CONFIG_VALUE_0"] = f"AUTHORIZATION: bearer {token}"
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    env["LC_ALL"] = "C"  # keep git messages ASCII; Windows git may emit GBK text
     result = subprocess.run(
         ["git", "-C", str(ROOT), "push", "-u", "origin", "HEAD:main"],
         capture_output=True, text=True, env=env, timeout=180,
+        encoding="utf-8", errors="replace",
     )
-    print(result.stdout.strip())
+    out = (result.stdout or "").strip()
+    err = (result.stderr or "").strip()
+    if out:
+        print(out)
     if result.returncode != 0:
-        raise RuntimeError(f"git push failed: {result.stderr.strip()[:500]}")
+        raise RuntimeError(f"git push failed: {err[:500]}")
+
+
+def _git_bytes(*args: str) -> bytes:
+    return subprocess.check_output(["git", "-C", str(ROOT), *args])
+
+
+def _git_text(*args: str) -> str:
+    return subprocess.check_output(
+        ["git", "-C", str(ROOT), *args], text=True,
+        encoding="utf-8", errors="replace",
+    )
+
+
+def push_via_api(gh: "GitHub", owner: str, repo: str) -> None:
+    """Replay local commits through the Git Data API when git push cannot reach github.com.
+
+    Some sandboxed networks proxy only api.github.com (git smart-HTTP on
+    github.com returns 502). This path keeps the full local commit history by
+    recreating each tree/commit server-side, using the same REST channel that
+    already works for issues and milestones.
+    """
+    base = f"/repos/{owner}/{repo}"
+    local_shas = _git_text("log", "--reverse", "--format=%H", "HEAD").split()
+    if not local_shas:
+        raise RuntimeError("no local commits to push")
+
+    remote_head = None
+    try:
+        remote_head = gh.call("GET", f"{base}/git/ref/heads/main")["object"]["sha"]
+    except RuntimeError as exc:
+        if "HTTP 404" not in str(exc) and "HTTP 409" not in str(exc):
+            raise
+    if remote_head:
+        remote_msg = gh.call("GET", f"{base}/git/commits/{remote_head}")["message"].strip()
+        local_msg = _git_text("log", "-1", "--format=%B", "HEAD").strip()
+        if remote_msg == local_msg:
+            print("  remote main already matches local HEAD; nothing to push")
+            return
+        raise RuntimeError("remote main has different history; refusing to overwrite it")
+
+    parent = None
+    for sha in local_shas:
+        message = _git_text("log", "-1", "--format=%B", sha).strip()
+        tree_items = []
+        for record in _git_bytes("ls-tree", "-r", "-z", sha).split(b"\0"):
+            if not record:
+                continue
+            meta, path = record.split(b"\t", 1)
+            mode, obj_type, obj_sha = meta.split(b" ", 2)
+            if obj_type != b"blob":
+                continue
+            content = _git_bytes("cat-file", "blob", obj_sha.decode("ascii"))
+            blob = gh.call("POST", f"{base}/git/blobs", {
+                "content": base64.b64encode(content).decode("ascii"),
+                "encoding": "base64",
+            })
+            tree_items.append({
+                "path": path.decode("utf-8"), "mode": mode.decode("ascii"),
+                "type": "blob", "sha": blob["sha"],
+            })
+        tree = gh.call("POST", f"{base}/git/trees", {"tree": tree_items})
+        payload = {"message": message, "tree": tree["sha"]}
+        if parent:
+            payload["parents"] = [parent]
+        parent = gh.call("POST", f"{base}/git/commits", payload)["sha"]
+        print(f"  + api commit {parent[:8]} {message.splitlines()[0]}")
+
+    gh.call("POST", f"{base}/git/refs", {"ref": "refs/heads/main", "sha": parent})
+    print(f"  + created refs/heads/main at {parent[:8]}")
 
 
 def main() -> int:
@@ -222,7 +322,9 @@ def main() -> int:
     ap.add_argument("--project-number", type=int, default=0,
                     help="Projects v2 number to link issues into; 0 = skip board linking")
     ap.add_argument("--push-local", action="store_true",
-                    help="also push the local git repository to origin/main")
+                    help="also push the local git repository to origin/main (falls back to API)")
+    ap.add_argument("--push-api", action="store_true",
+                    help="skip git push and upload commits via the Git Data API only")
     args = ap.parse_args()
 
     milestones, issues = parse_backlog()
@@ -303,7 +405,7 @@ def main() -> int:
         "- `docs/M1-设计说明与任务拆解.md`\n"
     )
     created_count = 0
-    board_items: list[tuple[dict, str]] = []
+    board_items: list[tuple[dict, str, str]] = []
     for i in issues:
         target = existing.get(i["title"])
         if target is None:
@@ -321,7 +423,7 @@ def main() -> int:
                 gh.call("PATCH", f"{base}/issues/{target['number']}", {"state": "closed"})
             created_count += 1
             print(f"  + issue #{target['number']} {i['title']} ({i['state']})")
-        board_items.append((target, "Done" if i["state"] == "done" else "Todo"))
+        board_items.append((target, "Done" if i["state"] == "done" else "Todo", i["priority"]))
 
     print(f"Done. Created {created_count} new issues in {owner}/{repo}.")
     if args.project_number:
@@ -329,12 +431,21 @@ def main() -> int:
             attach_to_project(gh, args.project_owner, args.project_number, board_items)
         except RuntimeError as exc:
             print(f"  ! board linking failed (issues were still created): {exc}")
-    if args.push_local:
-        try:
-            push_local_repo(args.token, owner, repo)
-            print("  + pushed local repository to origin/main")
-        except (RuntimeError, subprocess.SubprocessError) as exc:
-            print(f"  ! push failed (issues were still created): {exc}")
+    if args.push_local or args.push_api:
+        pushed = False
+        if args.push_local:
+            try:
+                push_local_repo(args.token, owner, repo)
+                pushed = True
+                print("  + pushed local repository to origin/main (git)")
+            except (RuntimeError, subprocess.SubprocessError) as exc:
+                print(f"  ! git push failed: {exc}; falling back to Git Data API")
+        if not pushed:
+            try:
+                push_via_api(gh, owner, repo)
+                print("  + pushed local repository to origin/main (Git Data API)")
+            except (RuntimeError, subprocess.SubprocessError) as exc:
+                print(f"  ! API push failed (issues were still created): {exc}")
     return 0
 
 
