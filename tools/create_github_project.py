@@ -263,24 +263,48 @@ def push_via_api(gh: "GitHub", owner: str, repo: str) -> None:
     local_shas = _git_text("log", "--reverse", "--format=%H", "HEAD").split()
     if not local_shas:
         raise RuntimeError("no local commits to push")
+    messages = {sha: _git_text("log", "-1", "--format=%B", sha).strip()
+                for sha in local_shas}
 
-    remote_head = None
-    try:
-        remote_head = gh.call("GET", f"{base}/git/ref/heads/main")["object"]["sha"]
-    except RuntimeError as exc:
-        if "HTTP 404" not in str(exc) and "HTTP 409" not in str(exc):
+    def main_ref() -> str | None:
+        try:
+            return gh.call("GET", f"{base}/git/ref/heads/main")["object"]["sha"]
+        except RuntimeError as exc:
+            if "HTTP 404" in str(exc) or "HTTP 409" in str(exc):
+                return None
             raise
-    if remote_head:
+
+    remote_head = main_ref()
+    bootstrap = False
+    parent = None
+    if remote_head is None:
+        # GitHub rejects every Git Data API write on a repository with no
+        # commits ("Git Repository is empty"). Seed it via the Contents API,
+        # then point main at the replayed local history below.
+        seed = ROOT / "README.md"
+        content = seed.read_bytes() if seed.exists() else b"# WinDock\n"
+        gh.call("PUT", f"{base}/contents/README.md", {
+            "message": "chore: initialize repository",
+            "content": base64.b64encode(content).decode("ascii"),
+            "branch": "main",
+        })
+        bootstrap = True
+        shas = local_shas
+        print("  + seeded empty repository via Contents API")
+    else:
         remote_msg = gh.call("GET", f"{base}/git/commits/{remote_head}")["message"].strip()
-        local_msg = _git_text("log", "-1", "--format=%B", "HEAD").strip()
-        if remote_msg == local_msg:
+        matches = [n for n, sha in enumerate(local_shas) if messages[sha] == remote_msg]
+        if not matches:
+            raise RuntimeError("remote main has diverged from local history; refusing to force push")
+        start = matches[-1] + 1
+        if start >= len(local_shas):
             print("  remote main already matches local HEAD; nothing to push")
             return
-        raise RuntimeError("remote main has different history; refusing to overwrite it")
+        shas = local_shas[start:]
+        parent = remote_head
 
-    parent = None
-    for sha in local_shas:
-        message = _git_text("log", "-1", "--format=%B", sha).strip()
+    for sha in shas:
+        message = messages[sha]
         tree_items = []
         for record in _git_bytes("ls-tree", "-r", "-z", sha).split(b"\0"):
             if not record:
@@ -305,8 +329,13 @@ def push_via_api(gh: "GitHub", owner: str, repo: str) -> None:
         parent = gh.call("POST", f"{base}/git/commits", payload)["sha"]
         print(f"  + api commit {parent[:8]} {message.splitlines()[0]}")
 
-    gh.call("POST", f"{base}/git/refs", {"ref": "refs/heads/main", "sha": parent})
-    print(f"  + created refs/heads/main at {parent[:8]}")
+    ref_payload = {"sha": parent}
+    if bootstrap:
+        # Discard the disposable seed commit so main starts with local history.
+        ref_payload["force"] = True
+    gh.call("PATCH", f"{base}/git/refs/heads/main", ref_payload)
+    verb = "replaced bootstrap ref with local history" if bootstrap else "advanced refs/heads/main"
+    print(f"  + {verb} at {parent[:8]}")
 
 
 def main() -> int:
