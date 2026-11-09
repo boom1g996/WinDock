@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="AppName" xml:space="preserve"><value>WinDock</value></data>
+  <data name="Dock_AddApp" xml:space="preserve"><value>添加应用</value></data>
+  <data name="Dock_EmptyHint" xml:space="preserve"><value>点击 + 添加应用，或右键固定常用程序</value></data>
+  <data name="Dock_Show" xml:space="preserve"><value>显示 Dock</value></data>
+  <data name="Dock_Hide" xml:space="preserve"><value>隐藏 Dock</value></data>
+  <data name="Tray_Tip" xml:space="preserve"><value>WinDock · 任务栏 Dock 化</value></data>
+  <data name="Tray_RestoreTaskbar" xml:space="preserve"><value>恢复原生任务栏</value></data>
+  <data name="Tray_Settings" xml:space="preserve"><value>设置…</value></data>
+  <data name="Tray_Exit" xml:space="preserve"><value>退出</value></data>
+  <data name="Menu_NewWindow" xml:space="preserve"><value>新建窗口</value></data>
+  <data name="Menu_Pin" xml:space="preserve"><value>固定到 Dock</value></data>
+  <data name="Menu_Unpin" xml:space="preserve"><value>从 Dock 移除</value></data>
+  <data name="Menu_ShowInExplorer" xml:space="preserve"><value>在资源管理器中显示</value></data>
+  <data name="Menu_CloseAll" xml:space="preserve"><value>关闭所有窗口</value></data>
+  <data name="Menu_ExitApp" xml:space="preserve"><value>退出应用</value></data>
+  <data name="Menu_DockSettings" xml:space="preserve"><value>Dock 设置…</value></data>
+  <data name="Menu_HideDock" xml:space="preserve"><value>隐藏 Dock</value></data>
+  <data name="Menu_NoWindows" xml:space="preserve"><value>（无窗口）</value></data>
+  <data name="Menu_NotResponding" xml:space="preserve"><value>无响应</value></data>
+  <data name="Menu_WindowList" xml:space="preserve"><value>窗口列表</value></data>
+  <data name="Settings_Title" xml:space="preserve"><value>WinDock 设置</value></data>
+  <data name="Settings_Appearance" xml:space="preserve"><value>外观</value></data>
+  <data name="Settings_Behavior" xml:space="preserve"><value>行为</value></data>
+  <data name="Settings_IconSize" xml:space="preserve"><value>图标尺寸</value></data>
+  <data name="Settings_IconSpacing" xml:space="preserve"><value>图标间距</value></data>
+  <data name="Settings_CornerRadius" xml:space="preserve"><value>圆角半径</value></data>
+  <data name="Settings_Opacity" xml:space="preserve"><value>不透明度</value></data>
+  <data name="Settings_MagnifyScale" xml:space="preserve"><value>放大倍率</value></data>
+  <data name="Settings_LaunchAtStartup" xml:space="preserve"><value>开机自动启动</value></data>
+  <data name="Settings_Reset" xml:space="preserve"><value>恢复默认</value></data>
+  <data name="Settings_OpenLog" xml:space="preserve"><value>打开日志目录</value></data>
+  <data name="Settings_Close" xml:space="preserve"><value>关闭</value></data>
+  <data name="Settings_Preview" xml:space="preserve"><value>实时预览</value></data>
+  <data name="Settings_ValuePercent" xml:space="preserve"><value>{0}%</value></data>
+  <data name="Settings_ValuePx" xml:space="preserve"><value>{0} px</value></data>
+  <data name="Settings_ValueTimes" xml:space="preserve"><value>{0}×</value></data>
+  <data name="Error_ConfigCorrupt" xml:space="preserve"><value>配置文件损坏，已回退默认配置并备份原文件</value></data>
+  <data name="Error_LaunchFailed" xml:space="preserve"><value>启动失败，请检查路径是否有效</value></data>
+  <data name="Error_ActivateFailed" xml:space="preserve"><value>无法激活窗口（可能被前台锁定或权限限制）</value></data>
+  <data name="Error_AdminWindow" xml:space="preserve"><value>目标窗口以管理员权限运行，Dock 不操作该窗口</value></data>
+  <data name="Error_NoTarget" xml:space="preserve"><value>未找到可执行文件路径</value></data>
+  <data name="Dialog_CloseAllTitle" xml:space="preserve"><value>关闭所有窗口</value></data>
+  <data name="Dialog_CloseAllText" xml:space="preserve"><value>确定关闭此应用的所有窗口吗？未保存的内容可能丢失。</value></data>
+  <data name="Dialog_AddAppTitle" xml:space="preserve"><value>选择要固定的应用</value></data>
+  <data name="Common_OK" xml:space="preserve"><value>确定</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>取消</value></data>
+  <data name="Common_Yes" xml:space="preserve"><value>是</value></data>
+  <data name="Common_No" xml:space="preserve"><value>否</value></data>
+  <data name="Log_Startup" xml:space="preserve"><value>WinDock 启动</value></data>
+  <data name="Log_Exit" xml:space="preserve"><value>WinDock 退出</value></data>
+  <data name="Log_TaskbarRestored" xml:space="preserve"><value>原生任务栏已恢复</value></data>
+  <data name="Log_Unhandled" xml:space="preserve"><value>未处理异常，已记录并尝试恢复任务栏</value></data>
+</root>

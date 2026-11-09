@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>WinDock.Core</RootNamespace>
+    <AssemblyName>WinDock.Core</AssemblyName>
+  </PropertyGroup>
+  <!-- 让 SDK 按约定把 Strings.resx 嵌入主程序集、Strings.en.resx 生成 en 卫星程序集，
+       ResourceManager 才能按 CurrentUICulture 自动切换中英文。 -->
+</Project>

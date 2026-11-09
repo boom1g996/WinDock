@@ -1,0 +1,20 @@
+<Project>
+  <PropertyGroup>
+    <!-- 需求 4.2 推荐 .NET 8；该版本 2026-11-10 终止支持，改用 .NET 10 LTS。
+         使用 net10.0-windows（而非带 Windows SDK 版本号的 TFM），避免离线环境还原
+         Microsoft.Windows.SDK.NET.Ref。系统能力全部走 P/Invoke，不依赖 WinRT 投影。 -->
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <UseWPF>true</UseWPF>
+    <Version>0.1.0</Version>
+    <Product>WinDock</Product>
+    <Company>WinDock</Company>
+    <Copyright>Copyright (c) 2026 WinDock</Copyright>
+    <NeutralLanguage>zh-CN</NeutralLanguage>
+    <EnableNETAnalyzers>false</EnableNETAnalyzers>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+</Project>

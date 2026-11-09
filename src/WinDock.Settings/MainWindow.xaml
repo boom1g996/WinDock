@@ -1,0 +1,73 @@
+<Window x:Class="WinDock.Settings.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="480" Height="640" MinWidth="440"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="CanMinimize">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="18">
+            <TextBlock x:Name="TitleText" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,14" />
+
+            <TextBlock x:Name="PreviewLabel" Margin="0,0,0,6" Opacity="0.7" />
+            <Border x:Name="PreviewCapsule" HorizontalAlignment="Center" Padding="12"
+                    Margin="0,0,0,16" BorderThickness="1" BorderBrush="#33FFFFFF">
+                <StackPanel x:Name="PreviewIcons" Orientation="Horizontal" />
+            </Border>
+
+            <GroupBox x:Name="AppearanceGroup" Padding="10" Margin="0,0,0,12">
+                <StackPanel>
+                    <StackPanel Margin="0,6">
+                        <DockPanel>
+                            <TextBlock x:Name="IconSizeLabel" />
+                            <TextBlock x:Name="IconSizeValue" DockPanel.Dock="Right" HorizontalAlignment="Right" />
+                        </DockPanel>
+                        <Slider x:Name="IconSizeSlider" Minimum="32" Maximum="96"
+                                TickFrequency="1" IsSnapToTickEnabled="True" />
+                    </StackPanel>
+                    <StackPanel Margin="0,6">
+                        <DockPanel>
+                            <TextBlock x:Name="IconSpacingLabel" />
+                            <TextBlock x:Name="IconSpacingValue" DockPanel.Dock="Right" HorizontalAlignment="Right" />
+                        </DockPanel>
+                        <Slider x:Name="IconSpacingSlider" Minimum="0" Maximum="32"
+                                TickFrequency="1" IsSnapToTickEnabled="True" />
+                    </StackPanel>
+                    <StackPanel Margin="0,6">
+                        <DockPanel>
+                            <TextBlock x:Name="CornerLabel" />
+                            <TextBlock x:Name="CornerValue" DockPanel.Dock="Right" HorizontalAlignment="Right" />
+                        </DockPanel>
+                        <Slider x:Name="CornerSlider" Minimum="0" Maximum="50"
+                                TickFrequency="1" IsSnapToTickEnabled="True" />
+                    </StackPanel>
+                    <StackPanel Margin="0,6">
+                        <DockPanel>
+                            <TextBlock x:Name="OpacityLabel" />
+                            <TextBlock x:Name="OpacityValue" DockPanel.Dock="Right" HorizontalAlignment="Right" />
+                        </DockPanel>
+                        <Slider x:Name="OpacitySlider" Minimum="0" Maximum="100"
+                                TickFrequency="1" IsSnapToTickEnabled="True" />
+                    </StackPanel>
+                    <StackPanel Margin="0,6">
+                        <DockPanel>
+                            <TextBlock x:Name="MagnifyLabel" />
+                            <TextBlock x:Name="MagnifyValue" DockPanel.Dock="Right" HorizontalAlignment="Right" />
+                        </DockPanel>
+                        <Slider x:Name="MagnifySlider" Minimum="1" Maximum="2.5"
+                                TickFrequency="0.05" IsSnapToTickEnabled="True" />
+                    </StackPanel>
+                </StackPanel>
+            </GroupBox>
+
+            <GroupBox x:Name="BehaviorGroup" Padding="10">
+                <CheckBox x:Name="StartupCheckBox" Margin="0,4" />
+            </GroupBox>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,4">
+                <Button x:Name="ResetButton" MinWidth="110" Margin="0,0,8,0" Padding="10,5" />
+                <Button x:Name="LogButton" MinWidth="110" Margin="0,0,8,0" Padding="10,5" />
+                <Button x:Name="CloseButton" MinWidth="80" Padding="10,5" />
+            </StackPanel>
+        </StackPanel>
+    </ScrollViewer>
+</Window>

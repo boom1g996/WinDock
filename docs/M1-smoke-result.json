@@ -1,0 +1,42 @@
+{
+  "timestamp": "2026-11-09T13:48:42",
+  "exe": "D:\\workspace\\W&dock\\artifacts\\WinDock-framework-dependent\\DockHost.exe",
+  "early_exit_code": null,
+  "pid": 28588,
+  "started_new_process": true,
+  "windows": [
+    {
+      "class": "HwndWrapper[DockHost;;21d88da6-7cc3-4ccf-9433-97fbf9ec7d87]",
+      "rect": [
+        656,
+        986,
+        1137,
+        1112
+      ],
+      "size": [
+        481,
+        126
+      ]
+    }
+  ],
+  "visible_window_count": 1,
+  "sample_seconds": 30.0,
+  "idle_cpu_percent": 0.208,
+  "working_set_mb": 198.79,
+  "log_errors": [],
+  "log_tail": [
+    "   at System.Text.Json.Serialization.Metadata.JsonTypeInfo`1.Deserialize(Utf8JsonReader& reader, ReadStack& state)",
+    "   at System.Text.Json.JsonSerializer.ReadFromSpan[TValue](ReadOnlySpan`1 utf8Json, JsonTypeInfo`1 jsonTypeInfo, Nullable`1 actualByteCount)",
+    "   at System.Text.Json.JsonSerializer.ReadFromSpan[TValue](ReadOnlySpan`1 json, JsonTypeInfo`1 jsonTypeInfo)",
+    "   at System.Text.Json.JsonSerializer.Deserialize[TValue](String json, JsonSerializerOptions options)",
+    "   at WinDock.Core.Services.ConfigService.LoadFromDisk(List`1& warnings) in D:\\workspace\\W&dock\\src\\WinDock.Core\\Services\\ConfigService.cs:line 261",
+    "[Config][WARN] 2026-11-09 13:48:10.938 配置文件损坏或不可读，已回退默认配置并备份原文件",
+    "[Config][INFO] 2026-11-09 13:48:10.963 首次运行，已写入默认配置",
+    "[App][INFO] 2026-11-09 13:48:11.020 WinDock 退出",
+    "[App][INFO] 2026-11-09 13:48:43.333 WinDock 启动",
+    "[Icon][INFO] 2026-11-09 13:48:43.345 PrivateExtractIconsW 导出可用=True",
+    "[WindowEnum][INFO] 2026-11-09 13:48:43.689 事件钩子就绪，初始聚合 7 个应用",
+    "[Dock][INFO] 2026-11-09 13:48:43.846 已尝试启用系统 Acrylic 背板（分层窗口下可能被系统忽略）"
+  ],
+  "verdict": "PASS"
+}

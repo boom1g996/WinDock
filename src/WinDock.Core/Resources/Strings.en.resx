@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype"><value>text/microsoft-resx</value></resheader>
+  <resheader name="version"><value>2.0</value></resheader>
+  <resheader name="reader"><value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <resheader name="writer"><value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value></resheader>
+  <data name="AppName" xml:space="preserve"><value>WinDock</value></data>
+  <data name="Dock_AddApp" xml:space="preserve"><value>Add app</value></data>
+  <data name="Dock_EmptyHint" xml:space="preserve"><value>Press + to add an app, or right-click to pin</value></data>
+  <data name="Dock_Show" xml:space="preserve"><value>Show Dock</value></data>
+  <data name="Dock_Hide" xml:space="preserve"><value>Hide Dock</value></data>
+  <data name="Tray_Tip" xml:space="preserve"><value>WinDock - Dock for Windows</value></data>
+  <data name="Tray_RestoreTaskbar" xml:space="preserve"><value>Restore Windows taskbar</value></data>
+  <data name="Tray_Settings" xml:space="preserve"><value>Settings...</value></data>
+  <data name="Tray_Exit" xml:space="preserve"><value>Exit</value></data>
+  <data name="Menu_NewWindow" xml:space="preserve"><value>New window</value></data>
+  <data name="Menu_Pin" xml:space="preserve"><value>Pin to Dock</value></data>
+  <data name="Menu_Unpin" xml:space="preserve"><value>Remove from Dock</value></data>
+  <data name="Menu_ShowInExplorer" xml:space="preserve"><value>Show in Explorer</value></data>
+  <data name="Menu_CloseAll" xml:space="preserve"><value>Close all windows</value></data>
+  <data name="Menu_ExitApp" xml:space="preserve"><value>Quit app</value></data>
+  <data name="Menu_DockSettings" xml:space="preserve"><value>Dock settings...</value></data>
+  <data name="Menu_HideDock" xml:space="preserve"><value>Hide Dock</value></data>
+  <data name="Menu_NoWindows" xml:space="preserve"><value>(no windows)</value></data>
+  <data name="Menu_NotResponding" xml:space="preserve"><value>Not responding</value></data>
+  <data name="Menu_WindowList" xml:space="preserve"><value>Windows</value></data>
+  <data name="Settings_Title" xml:space="preserve"><value>WinDock Settings</value></data>
+  <data name="Settings_Appearance" xml:space="preserve"><value>Appearance</value></data>
+  <data name="Settings_Behavior" xml:space="preserve"><value>Behavior</value></data>
+  <data name="Settings_IconSize" xml:space="preserve"><value>Icon size</value></data>
+  <data name="Settings_IconSpacing" xml:space="preserve"><value>Icon spacing</value></data>
+  <data name="Settings_CornerRadius" xml:space="preserve"><value>Corner radius</value></data>
+  <data name="Settings_Opacity" xml:space="preserve"><value>Opacity</value></data>
+  <data name="Settings_MagnifyScale" xml:space="preserve"><value>Magnification</value></data>
+  <data name="Settings_LaunchAtStartup" xml:space="preserve"><value>Launch at startup</value></data>
+  <data name="Settings_Reset" xml:space="preserve"><value>Reset to defaults</value></data>
+  <data name="Settings_OpenLog" xml:space="preserve"><value>Open log folder</value></data>
+  <data name="Settings_Close" xml:space="preserve"><value>Close</value></data>
+  <data name="Settings_Preview" xml:space="preserve"><value>Live preview</value></data>
+  <data name="Settings_ValuePercent" xml:space="preserve"><value>{0}%</value></data>
+  <data name="Settings_ValuePx" xml:space="preserve"><value>{0} px</value></data>
+  <data name="Settings_ValueTimes" xml:space="preserve"><value>{0}x</value></data>
+  <data name="Error_ConfigCorrupt" xml:space="preserve"><value>Config file corrupt; defaults restored and original backed up</value></data>
+  <data name="Error_LaunchFailed" xml:space="preserve"><value>Failed to launch. Check that the path is valid.</value></data>
+  <data name="Error_ActivateFailed" xml:space="preserve"><value>Could not activate window (foreground lock or elevation).</value></data>
+  <data name="Error_AdminWindow" xml:space="preserve"><value>Target runs elevated; Dock will not act on it.</value></data>
+  <data name="Error_NoTarget" xml:space="preserve"><value>No executable path found.</value></data>
+  <data name="Dialog_CloseAllTitle" xml:space="preserve"><value>Close all windows</value></data>
+  <data name="Dialog_CloseAllText" xml:space="preserve"><value>Close all windows of this app? Unsaved work may be lost.</value></data>
+  <data name="Dialog_AddAppTitle" xml:space="preserve"><value>Choose an app to pin</value></data>
+  <data name="Common_OK" xml:space="preserve"><value>OK</value></data>
+  <data name="Common_Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Common_Yes" xml:space="preserve"><value>Yes</value></data>
+  <data name="Common_No" xml:space="preserve"><value>No</value></data>
+  <data name="Log_Startup" xml:space="preserve"><value>WinDock starting</value></data>
+  <data name="Log_Exit" xml:space="preserve"><value>WinDock exiting</value></data>
+  <data name="Log_TaskbarRestored" xml:space="preserve"><value>Windows taskbar restored</value></data>
+  <data name="Log_Unhandled" xml:space="preserve"><value>Unhandled exception; logged and taskbar restore attempted</value></data>
+</root>
