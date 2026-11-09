@@ -55,7 +55,7 @@ $sec = Read-Host -AsSecureString "粘贴新 PAT"
 
 助手会从注册表读取该值并注入同步进程，token 不打印、不写入仓库、不进 `.git/config`。若不想写注册表，也可把单行 token 存到**仓库外**的文件（如 `C:\Users\83892\.windock-github-token`）并告知路径，用完即删。
 
-> **不要在聊天里贴 token**：GitHub 会对公开泄露的 token 自动 revoke，本轮 `401 Bad credentials` 即由此引发。
+> **不要在聊天里贴 token**：GitHub 会对公开泄露的 token 自动 revoke（旧 PAT 的 `401 Bad credentials` 即由此引发）。若采用文件方式，用完请立即删除该文件并按需轮换 PAT。
 
 ### 4.1 新增或调整任务
 
@@ -92,5 +92,5 @@ API 方式通过 Git Data API 逐个重放本地提交（blob → tree → commi
 2. **GitHub MCP 连接器**：当前授权为只读 GitHub App，`create_repository` 返回 `403 Resource not accessible by integration`；写操作一律走 PAT 脚本。
 3. **PAT 安全**：脚本不打印、不落盘 token；`git push` 用 `GIT_CONFIG_*` 环境变量注入认证头，不写 `.git/config`。曾明文出现过的 PAT 应撤销并轮换。
 4. **提交 SHA 不一致**：API 重放会按服务端时间重新生成 commit 对象，远端与本地的 commit SHA 不同（内容、顺序、message 一致）。因此将来即使网络恢复，也不要直接 `git push`（会被判为分叉）；继续用 `--push-api` 增量同步，或在可直连的机器上重新 clone 后以远端为准。
-5. **凭据状态（2026-11-09 更新）**：此前在会话中明文出现的 classic PAT 已失效，`GET /repos/boom1g996/WinDock` 返回 **401 Bad credentials**（GitHub 会对公开泄露的 token 自动撤销，也可能已被手动轮换）。**M1 代码提交 `53c0868` 目前只在本地**，远端 `main` 仍停在上一轮同步的历史。恢复步骤：新建 classic PAT（`repo` + `project`）→ 设为 `GITHUB_TOKEN` 环境变量（不要在聊天里贴）→ `python tools/create_github_project.py --push-api`。**不要重复尝试旧 token**；401 是确定性失败，不是限流或临时故障。
-6. **M1 状态**：设计说明 §5 六条默认值已获用户「按默认」确认，WD-001~013 代码已落地；交付清单与 10 项已知问题见 `docs/M1-变更说明与已知问题.md`。看板 M1 卡片状态暂未改为 Done：M1 出口标准「可日常使用 1 天不崩」尚未实跑实证（K-08），不宜提前标完成。
+5. **凭据状态（2026-11-09 14:15 已恢复）**：此前明文出现的 classic PAT 失效导致的 `401 Bad credentials` 已解除。用户提供新 classic PAT（身份 `boom1g996`，scope 含 `repo` + `project`），以**仓库外单行文件**方式交给助手读取，仅在同步进程内注入 `GITHUB_TOKEN`。`--push-api` 增量推送 3 个提交成功：`53c0868` → `2b3693a7`、`6af0419` → `448793c4`、`9c297e7` → `94f600e7`；远端 `main` HEAD 为 `94f600e7`，复核 49 个文件齐全（含 `src/`、`docs/M1-*`），`artifacts/` 按预期排除。**旧 token 不要再试**；用完请删除本地 token 文件并按需轮换。
+6. **M1 状态**：设计说明 §5 六条默认值已获用户「按默认」确认，WD-001~013 代码已落地并同步至远端；交付清单与 10 项已知问题见 `docs/M1-变更说明与已知问题.md`。看板 M1 卡片状态暂未改为 Done：M1 出口标准「可日常使用 1 天不崩」尚未实跑实证（K-08），不宜提前标完成。
