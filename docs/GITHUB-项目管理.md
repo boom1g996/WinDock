@@ -18,7 +18,7 @@
 | 项 | 数量 / 状态 |
 | --- | --- |
 | 仓库 | 1 个，public |
-| Labels | 17 个（P0/P1/P2、9 个 module、4 个 type、risk:system-api） |
+| Labels | 脚本创建 17 个（P0/P1/P2、9 个 module、4 个 type、risk:system-api）；加上 GitHub 仓库默认 10 个，合计 27 个 |
 | Milestones | 5 个：M0 技术预研 / M1 MVP / M2 体验完善 / M3 正式版 / M4 增强 |
 | Issues | 35 条（#1~#35）；M0 三条已关闭，其余 open |
 | 看板卡片 | 35 张；Status `Done`×3 / `Todo`×32；Priority P0×23 / P1×7 / P2×5 |
@@ -65,11 +65,12 @@ python tools/create_github_project.py --project-number 1
 | 脚本自动 | `python tools/create_github_project.py --push-local` | 先试 git push，失败自动回退 API |
 | 仅 API | `python tools/create_github_project.py --push-api` | **本机推荐**，代理只放行 api.github.com |
 
-API 方式通过 Git Data API 逐个重放本地提交（blob → tree → commit → ref），保留提交顺序与 message；远端 `main` 已存在且与本地 HEAD 不同时会拒绝覆盖，避免误删历史。
+API 方式通过 Git Data API 逐个重放本地提交（blob → tree → commit → ref），保留提交顺序与 message。**空仓库**会先用 Contents API 建一个引导 commit 激活仓库，再用本地历史替换该 ref；后续调用按 commit message 定位远端位置，只推送新增提交；历史分叉时拒绝强制覆盖。
 
 ## 5. 已知约束
 
 1. **网络**：本机代理对 `github.com` 的 git smart-HTTP 返回 `502`，直连 443 超时；REST / GraphQL 的 `api.github.com` 通道正常。这是环境限制，不是仓库权限问题。
 2. **GitHub MCP 连接器**：当前授权为只读 GitHub App，`create_repository` 返回 `403 Resource not accessible by integration`；写操作一律走 PAT 脚本。
 3. **PAT 安全**：脚本不打印、不落盘 token；`git push` 用 `GIT_CONFIG_*` 环境变量注入认证头，不写 `.git/config`。曾明文出现过的 PAT 应撤销并轮换。
-4. **未开工项**：M1 代码尚未编写，等待 `docs/M1-设计说明与任务拆解.md` §5 的 6 条默认值批复（按默认即可开工 WD-001~013）。
+4. **提交 SHA 不一致**：API 重放会按服务端时间重新生成 commit 对象，远端与本地的 commit SHA 不同（内容、顺序、message 一致）。因此将来即使网络恢复，也不要直接 `git push`（会被判为分叉）；继续用 `--push-api` 增量同步，或在可直连的机器上重新 clone 后以远端为准。
+5. **未开工项**：M1 代码尚未编写，等待 `docs/M1-设计说明与任务拆解.md` §5 的 6 条默认值批复（按默认即可开工 WD-001~013）。
