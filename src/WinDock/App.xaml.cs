@@ -27,6 +27,13 @@ public partial class App : Application
     private TrayService? _tray;
     private MainWindow? _dock;
 
+    // M2 第二批：自动隐藏 / 全屏检测 / 热区 / 快捷键 / 唯一延时调度器
+    private ITimerScheduler? _timers;
+    private IFullScreenDetector? _fullScreen;
+    private IHotZone? _hotZone;
+    private IAutoHideController? _autoHide;
+    private IHotkeyService? _hotkey;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -75,15 +82,33 @@ public partial class App : Application
             icons, _animation, launcher);
         _tray = new TrayService(_config, _log, _taskbar, _dock, OpenSettings);
 
+        // M2 组合根：所有新增能力按接口组装，模块之间不互相引用实现（需求 14.2）。
+        // 延时只走这一个 TimerScheduler，动效只走这一个 AnimationEngine（M2 D3）。
+        _timers = new TimerScheduler(SynchronizationContext.Current);
+        _hotZone = new HotZone(_log);
+        _fullScreen = new FullScreenDetector(_log, _timers, SynchronizationContext.Current);
+        _hotkey = new HotkeyService(_log);
+        _autoHide = new AutoHideController(_log, _timers, _animation,
+            _fullScreen, _hotZone, _dock);
+        _dock.BindAutoHide(_autoHide, _hotkey);
+        _fullScreen.StateChanged += (_, full) =>
+        {
+            if (_dock is not null)
+            {
+                _dock.AnimationsPaused = full;
+            }
+        };
+
         _enumerator.WindowsChanged += (_, _) => _dock.RefreshItems();
         _config.Changed += OnConfigChanged;
         _taskbar.TaskbarRecreated += OnTaskbarRecreated;
 
         _enumerator.Start();
         _dock.RefreshItems();
-        _dock.Show();
+        _dock.Show(); // 触发 SourceInitialized → 注册 Ctrl+Alt+D
         _tray.ApplyConfig(_config.Current);
         StartupRegistry.Apply(_config.Current.General.LaunchAtStartup, _log);
+        _fullScreen.Start();
     }
 
     protected override void OnExit(ExitEventArgs e)
@@ -98,6 +123,11 @@ public partial class App : Application
             _log?.Error("App", "退出时恢复任务栏失败", ex);
         }
 
+        _autoHide?.Dispose();
+        _fullScreen?.Dispose();
+        _hotkey?.Dispose();
+        _hotZone?.Dispose();
+        _timers?.Dispose();
         _tray?.Dispose();
         _enumerator?.Dispose();
         _animation?.Dispose();
@@ -120,6 +150,8 @@ public partial class App : Application
         Loc.Instance.SetLanguage(args.Config.General.Language);
         _dock?.ApplyConfig(args.Config);
         _tray?.ApplyConfig(args.Config);
+        _autoHide?.ApplyConfig(args.Config);
+        _hotkey?.ApplyConfig(args.Config);
         if (_log is not null)
         {
             StartupRegistry.Apply(args.Config.General.LaunchAtStartup, _log);

@@ -33,8 +33,43 @@ public interface IAutoHideController : IDisposable
     bool IsHidden { get; }
     void ApplyConfig(DockConfig config);
     void Show();
-    void Hide();
+    /// <summary>force=true 用于托盘手动隐藏 / 全屏强制隐藏，忽略鼠标仍停留在 Dock 上。</summary>
+    void Hide(bool force = false);
+    void Toggle();
     event EventHandler<bool>? VisibilityChanged;
+}
+
+/// <summary>
+/// Dock 窗口对自动隐藏控制器的窄接口：Core 层不依赖 WPF Window 类型（需求 14.2）。
+/// 位移与命中测试由宿主实现，动画数值仍来自 IAnimationEngine 单一时间轴。
+/// </summary>
+public interface IDockWindowHost
+{
+    /// <summary>完全滑出屏幕所需位移（DIP）= Dock 高度 + 8。</summary>
+    double HiddenDistance { get; }
+    bool IsPointerOverDock { get; }
+    void SetSlideOffset(double dip);
+    void SetVisible(bool visible);
+    void SetInteractive(bool interactive);
+    event EventHandler? PointerEntered;
+    event EventHandler? PointerLeft;
+}
+
+/// <summary>2px 原生分层热区窗口；不装全局鼠标钩子（D5）。</summary>
+public interface IHotZone : IDisposable
+{
+    bool IsEnabled { get; }
+    void Apply(int heightPx);
+    void Enable();
+    void Disable();
+    event EventHandler? Entered;
+}
+
+/// <summary>全局快捷键（FR-602）：仅 RegisterHotKey，可卸载，无全局鼠标钩子。</summary>
+public interface IHotkeyService : IDisposable
+{
+    void Attach(IntPtr hwnd);
+    void ApplyConfig(DockConfig config);
 }
 
 /// <summary>全屏检测：QUNS 状态 + 前台窗口是否覆盖整屏的双判据（FR-603）。</summary>

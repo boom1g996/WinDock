@@ -1,0 +1,71 @@
+{
+  "timestamp": "2026-11-09T15:56:05",
+  "exe": "D:\\workspace\\W&dock\\artifacts\\WinDock-framework-dependent\\DockHost.exe",
+  "early_exit_code": null,
+  "pid": 23808,
+  "started_new_process": true,
+  "windows": [
+    {
+      "class": "WinDock.HotZone.v1",
+      "rect": [
+        0,
+        1118,
+        1792,
+        1120
+      ],
+      "size": [
+        1792,
+        2
+      ],
+      "visible": true
+    }
+  ],
+  "visible_window_count": 1,
+  "dock_window_present": true,
+  "auto_hidden": true,
+  "hotzone_windows": [
+    {
+      "class": "WinDock.HotZone.v1",
+      "rect": [
+        0,
+        1118,
+        1792,
+        1120
+      ],
+      "size": [
+        1792,
+        2
+      ],
+      "visible": true
+    }
+  ],
+  "settle_seconds": 6.0,
+  "cold_start_cpu_seconds": 1.391,
+  "cpu_trace_percent_per_5s": [
+    0.0,
+    0.0,
+    0.0,
+    0.625,
+    0.312,
+    0.312
+  ],
+  "sample_seconds": 30.0,
+  "idle_cpu_percent": 0.208,
+  "working_set_mb": 205.38,
+  "log_errors": [],
+  "log_tail": [
+    "[App][INFO] 2026-11-09 15:52:49.032 WinDock 启动",
+    "[Icon][INFO] 2026-11-09 15:52:49.046 PrivateExtractIconsW 导出可用=True；磁盘缓存启用=True",
+    "[AutoHide][INFO] 2026-11-09 15:52:49.332 自动隐藏=True, 延迟=800ms, 全屏隐藏=True",
+    "[WindowEnum][INFO] 2026-11-09 15:52:49.414 事件钩子就绪，初始聚合 7 个应用",
+    "[Dock][INFO] 2026-11-09 15:52:49.598 已尝试启用系统 Acrylic 背板（分层窗口下可能被系统忽略）",
+    "[Hotkey][INFO] 2026-11-09 15:52:49.603 全局快捷键 Ctrl+Alt+D 已注册",
+    "[App][INFO] 2026-11-09 15:56:06.310 WinDock 启动",
+    "[Icon][INFO] 2026-11-09 15:56:06.328 PrivateExtractIconsW 导出可用=True；磁盘缓存启用=True",
+    "[AutoHide][INFO] 2026-11-09 15:56:06.646 自动隐藏=True, 延迟=800ms, 全屏隐藏=True",
+    "[WindowEnum][INFO] 2026-11-09 15:56:06.733 事件钩子就绪，初始聚合 7 个应用",
+    "[Dock][INFO] 2026-11-09 15:56:06.948 已尝试启用系统 Acrylic 背板（分层窗口下可能被系统忽略）",
+    "[Hotkey][INFO] 2026-11-09 15:56:06.952 全局快捷键 Ctrl+Alt+D 已注册"
+  ],
+  "verdict": "PASS"
+}

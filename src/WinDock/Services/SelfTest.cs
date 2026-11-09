@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text;
+using System.Threading;
 using WinDock.Core;
 using WinDock.Core.Interfaces;
 using WinDock.Core.Models;
@@ -93,7 +94,57 @@ public static class SelfTest
                     $"实际={service.Current.Dock.IconSize}");
             }
 
-            // 5. 中英资源
+            // 5. M2 新增配置字段同样必须夹紧（schemaVersion 保持 1）
+            var m2 = new DockConfig();
+            m2.Behavior.PreviewHoverDelayMs = 99999;
+            m2.Behavior.PreviewMaxWindows = 0;
+            m2.Behavior.WatchdogHeartbeatMs = 1;
+            m2.Animation.BounceCount = 0;
+            m2.Animation.IndicatorFadeMs = 9999;
+            ConfigService.Normalize(m2, new List<string>());
+            Check("M2 新配置字段越界夹紧",
+                m2.Behavior.PreviewHoverDelayMs == 1500
+                && m2.Behavior.PreviewMaxWindows == 1
+                && m2.Behavior.WatchdogHeartbeatMs == 1000
+                && m2.Animation.BounceCount == 1
+                && m2.Animation.IndicatorFadeMs == 600,
+                $"hover={m2.Behavior.PreviewHoverDelayMs}, maxWin={m2.Behavior.PreviewMaxWindows}, "
+                + $"hb={m2.Behavior.WatchdogHeartbeatMs}, bounce={m2.Animation.BounceCount}, "
+                + $"fade={m2.Animation.IndicatorFadeMs}");
+
+            // 6. 动画引擎空闲不订阅渲染循环（M1 21% 空转的回归防线）
+            using (var engine = new AnimationEngine())
+            {
+                engine.SetHover(null, 3, 48, 10);
+                Check("动画引擎空闲不订阅 Rendering", !engine.IsRunning,
+                    $"IsRunning={engine.IsRunning}");
+                engine.Bounce(0, 48, 2);
+                Check("跳动触发统一时间轴", engine.IsRunning,
+                    $"IsRunning={engine.IsRunning}");
+                engine.StopBounce();
+            }
+
+            // 7. 单一延时调度器：单次触发 + 取消生效，且空闲不常驻回调
+            using (var scheduler = new TimerScheduler(new SynchronizationContext()))
+            using (var signal = new ManualResetEventSlim(false))
+            {
+                bool fired = false;
+                scheduler.Schedule("selftest.fire", 20, () =>
+                {
+                    fired = true;
+                    signal.Set();
+                });
+                bool ok = signal.Wait(TimeSpan.FromSeconds(2));
+                Check("TimerScheduler 单次触发", ok && fired, $"fired={fired}");
+
+                bool cancelled = false;
+                scheduler.Schedule("selftest.cancel", 1000, () => cancelled = true);
+                scheduler.Cancel("selftest.cancel");
+                Thread.Sleep(60);
+                Check("TimerScheduler 取消生效", !cancelled);
+            }
+
+            // 8. 中英资源
             Loc.Instance.SetLanguage("zh-CN");
             Check("中文资源可用",
                 Loc.Instance.T("AppName") == "WinDock"

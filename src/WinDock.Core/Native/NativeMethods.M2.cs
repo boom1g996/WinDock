@@ -11,6 +11,7 @@ namespace WinDock.Core.Native;
 public static partial class NativeMethods
 {
     public const uint EVENT_SYSTEM_ALERT = 0x0002;
+    public const uint EVENT_SYSTEM_MOVESIZEEND = 0x000B; // F11/全屏切换会 resize 窗口
     public const uint EVENT_OBJECT_STATECHANGE = 0x800A;
 
     public const uint MOD_ALT = 0x0001;
@@ -22,6 +23,7 @@ public static partial class NativeMethods
     public const int QUNS_PRESENTATION_MODE = 4;
     public const int QUNS_ACCEPTS_NOTIFICATIONS = 5;
 
+    public const uint WS_EX_TOOLWINDOW_FLAG = 0x00000080;
     public const uint WS_EX_LAYERED = 0x00080000;
     public const uint WS_EX_TRANSPARENT = 0x00000020;
     public const uint WS_EX_NOACTIVATE = 0x08000000;
@@ -36,6 +38,54 @@ public static partial class NativeMethods
     public const uint DWM_TNP_SOURCECLIENTAREAONLY = 0x00000010;
 
     public const uint DWM_FRAME_DURATION_DEFAULT = 0;
+
+    // 热区窗口（WD-015 / D5）：2px 原生分层窗口，不使用全局鼠标钩子。
+    public const uint WS_POPUP = 0x80000000;
+    public const uint WM_MOUSEMOVE = 0x0200;
+    public const uint SWP_SHOWWINDOW = 0x0040;
+    public const int SW_HIDE = 0;
+    public const int SW_SHOW = 5;
+    public const int HWND_TOPMOST = -1;
+    public const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
+
+    /// <summary>RegisterClassExW 的窗口类描述（Unicode）。</summary>
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct WNDCLASSEX
+    {
+        public uint cbSize;
+        public uint style;
+        public IntPtr lpfnWndProc;
+        public int cbClsExtra;
+        public int cbWndExtra;
+        public IntPtr hInstance;
+        public IntPtr hIcon;
+        public IntPtr hCursor;
+        public IntPtr hbrBackground;
+        [MarshalAs(UnmanagedType.LPWStr)] public string? lpszMenuName;
+        [MarshalAs(UnmanagedType.LPWStr)] public string lpszClassName;
+        public IntPtr hIconSm;
+    }
+
+    /// <summary>原生窗口过程；委托实例必须保活，避免被 GC 回收导致回调崩溃。</summary>
+    public delegate IntPtr WndProc(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern ushort RegisterClassExW(ref WNDCLASSEX lpwcx);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern bool UnregisterClassW(string lpClassName, IntPtr hInstance);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr CreateWindowExW(uint dwExStyle, string lpClassName,
+        string lpWindowName, uint dwStyle, int x, int y, int width, int height,
+        IntPtr hWndParent, IntPtr hMenu, IntPtr hInstance, IntPtr lpParam);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool DestroyWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern IntPtr DefWindowProcW(IntPtr hWnd, uint msg,
+        IntPtr wParam, IntPtr lParam);
 
     /// <summary>DWM 缩略图源尺寸（DwmQueryThumbnailSourceSize 输出）。</summary>
     [StructLayout(LayoutKind.Sequential)]

@@ -16,6 +16,12 @@
         </Border>
         <Ellipse x:Name="Indicator" Width="4" Height="4" Fill="#FFF2F4F8"
                  HorizontalAlignment="Center" VerticalAlignment="Bottom"
-                 Margin="0,0,0,-8" Visibility="Collapsed" />
+                 Margin="0,0,0,-8" Visibility="Collapsed"
+                 RenderTransformOrigin="0.5,0.5">
+            <!-- FR-204：指示点 150ms 淡入 + 从 0 放大到 1，数值由 AnimationEngine 统一给出 -->
+            <Ellipse.RenderTransform>
+                <ScaleTransform x:Name="IndicatorScale" ScaleX="1" ScaleY="1" />
+            </Ellipse.RenderTransform>
+        </Ellipse>
     </Grid>
 </UserControl>

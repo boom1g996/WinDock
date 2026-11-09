@@ -50,6 +50,9 @@ u32.IsWindowVisible.argtypes = [wintypes.HWND]
 u32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(RECT)]
 u32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
 u32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+u32.GetSystemMetrics.argtypes = [ctypes.c_int]
+u32.SetCursorPos.argtypes = [ctypes.c_int, ctypes.c_int]
+u32.GetCursorPos.argtypes = [ctypes.POINTER(wintypes.POINT)]
 k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
 k32.OpenProcess.restype = wintypes.HANDLE
 k32.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(FILETIME)] * 4
@@ -89,12 +92,11 @@ def working_set(pid: int) -> int | None:
 
 
 def windows_of(pid: int) -> list[dict]:
+    """返回该进程全部顶层窗口（M2：自动隐藏后 Dock 窗口不可见，仍须可核验）。"""
     found: list[dict] = []
 
     @WNDENUMPROC
     def callback(hwnd, _lparam):
-        if not u32.IsWindowVisible(hwnd):
-            return True
         owner = wintypes.DWORD()
         u32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
         if owner.value != pid:
@@ -107,11 +109,17 @@ def windows_of(pid: int) -> list[dict]:
             "class": name.value,
             "rect": [rect.left, rect.top, rect.right, rect.bottom],
             "size": [rect.right - rect.left, rect.bottom - rect.top],
+            "visible": bool(u32.IsWindowVisible(hwnd)),
         })
         return True
 
     u32.EnumWindows(callback, 0)
     return found
+
+
+def is_dock_window(w: dict) -> bool:
+    """Dock 主窗口：宽高都 >50；排除 2px 热区窗口与其它工具窗口。"""
+    return w["size"][0] > 50 and w["size"][1] > 50 and "HotZone" not in w["class"]
 
 
 def existing_pid() -> int | None:
@@ -158,6 +166,12 @@ def main() -> int:
                     help="idle CPU sampling window (default 4s)")
     ap.add_argument("--output", default=None,
                     help="result JSON path; M2+ 必须指定，避免覆盖 M1 交付记录 docs/M1-smoke-result.json")
+    ap.add_argument("--test-autohide", action="store_true",
+                    help="M2: 把光标移到底边 2px 热区，验证自动隐藏的 Dock 能滑入（会移动并恢复光标）")
+    ap.add_argument("--cpu-trace", action="store_true",
+                    help="按 5s 分段输出空闲 CPU，区分冷启动开销与稳态空转")
+    ap.add_argument("--settle-seconds", type=float, default=5.0,
+                    help="启动后先等待该时长再开始空闲 CPU 采样，避免把冷启动开销算进 8.1 指标")
     args = ap.parse_args()
     sample_seconds = max(1.0, args.sample_seconds)
     result_path = Path(args.output) if args.output else RESULT
@@ -173,10 +187,12 @@ def main() -> int:
 
     started_new = False
     pid = existing_pid()
+    cpu0 = None
     if pid is None:
         process = subprocess.Popen([str(EXE)], cwd=str(EXE.parent))
         pid = process.pid
         started_new = True
+        cpu0 = cpu_time(pid)
         time.sleep(3)
         report["early_exit_code"] = process.poll()
     else:
@@ -184,12 +200,40 @@ def main() -> int:
 
     report["pid"] = pid
     report["started_new_process"] = started_new
-    report["windows"] = windows_of(pid)
+    all_windows = windows_of(pid)
+    report["windows"] = [w for w in all_windows if w["visible"]]
     report["visible_window_count"] = len(report["windows"])
+    dock_windows = [w for w in all_windows if is_dock_window(w)]
+    report["dock_window_present"] = bool(dock_windows)
+    report["auto_hidden"] = bool(dock_windows) and not any(w["visible"] for w in dock_windows)
+    report["hotzone_windows"] = [w for w in all_windows if "HotZone" in w["class"]]
 
+    # 8.1「空闲 CPU」口径是稳态：冷启动的 JIT / 图标提取 / 初始化不算在内，
+    # 否则 30s 窗口会被启动阶段约 1s 的 CPU 时间污染（实测虚高到 3%）。
+    settle_left = max(0.0, args.settle_seconds - (3.0 if started_new else 0.0))
+    if settle_left > 0:
+        time.sleep(settle_left)
+    report["settle_seconds"] = args.settle_seconds
     cpu1 = cpu_time(pid)
-    time.sleep(sample_seconds)
-    cpu2 = cpu_time(pid)
+    if cpu0 is not None and cpu1 is not None:
+        report["cold_start_cpu_seconds"] = round(max(0.0, cpu1 - cpu0), 3)
+    if args.cpu_trace:
+        segments: list[float | None] = []
+        last = cpu1
+        remaining = sample_seconds
+        while remaining > 0:
+            step = min(5.0, remaining)
+            time.sleep(step)
+            current = cpu_time(pid)
+            segments.append(round(max(0.0, (current - last) / step * 100.0), 3)
+                            if current is not None and last is not None else None)
+            last = current
+            remaining -= step
+        report["cpu_trace_percent_per_5s"] = segments
+        cpu2 = last
+    else:
+        time.sleep(sample_seconds)
+        cpu2 = cpu_time(pid)
     report["sample_seconds"] = sample_seconds
     report["idle_cpu_percent"] = (
         round(max(0.0, (cpu2 - cpu1) / sample_seconds * 100.0), 3)
@@ -208,11 +252,27 @@ def main() -> int:
     ]
     report["log_tail"] = logs[-12:]
 
-    report["verdict"] = (
-        "PASS" if report["visible_window_count"] >= 1
-        and report["early_exit_code"] is None
-        else "FAIL"
-    )
+    if args.test_autohide:
+        # 冷启动 800ms 后 Dock 应已自动隐藏；把光标移到底边热区验证滑入。
+        point = wintypes.POINT()
+        u32.GetCursorPos(ctypes.byref(point))
+        original = (point.x, point.y)
+        screen_w = u32.GetSystemMetrics(0)
+        screen_h = u32.GetSystemMetrics(1)
+        u32.SetCursorPos(screen_w // 2, screen_h - 1)
+        time.sleep(0.6)
+        restored = [w for w in windows_of(pid)
+                    if w["visible"] and is_dock_window(w)]
+        report["autohide_restore"] = bool(restored)
+        report["hotzone_probe_point"] = [screen_w // 2, screen_h - 1]
+        u32.SetCursorPos(*original)
+
+    ok = (report["dock_window_present"]
+          and report["early_exit_code"] is None
+          and not report["log_errors"])
+    if args.test_autohide:
+        ok = ok and report["auto_hidden"] and report["autohide_restore"]
+    report["verdict"] = "PASS" if ok else "FAIL"
 
     result_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps({k: v for k, v in report.items() if k != "log_tail"},

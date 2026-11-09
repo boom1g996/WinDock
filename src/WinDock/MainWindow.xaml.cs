@@ -19,7 +19,7 @@ namespace WinDock;
 /// Dock 主条（WD-006~009）：无边框胶囊、固定区/分隔符/运行区/空态、动画帧应用、
 /// 点击与右键交互。只依赖接口，具体实现由 App.xaml.cs 组合根注入。
 /// </summary>
-public partial class MainWindow : Window
+public partial class MainWindow : Window, IDockWindowHost
 {
     private const string Module = "Dock";
 
@@ -33,6 +33,14 @@ public partial class MainWindow : Window
     private readonly List<DockIconControl> _iconControls = new();
     private DockConfig _current;
     private string _lastStructure = "";
+
+    // M2：自动隐藏宿主状态。_baseTop 是 Dock 完全显示时的目标 Y，
+    // 滑动只改 _slideOffset，动画数值全部来自 IAnimationEngine 单一时间轴。
+    private IAutoHideController? _autoHide;
+    private IHotkeyService? _hotkey;
+    private double _baseTop;
+    private double _slideOffset;
+    private bool _pointerOver;
 
     public MainWindow(IConfigService config, ILogService log, ITaskbarInterop taskbar,
         IWindowEnumerator enumerator, IIconService icons, IAnimationEngine animation,
@@ -49,7 +57,8 @@ public partial class MainWindow : Window
         _current = config.Current;
 
         _animation.Frame += OnAnimationFrame;
-        Root.MouseLeave += (_, _) => ClearHover();
+        Root.MouseEnter += OnRootMouseEnter;
+        Root.MouseLeave += OnRootMouseLeave;
         KeyDown += OnWindowKeyDown;
         SourceInitialized += OnSourceInitialized;
 
@@ -59,17 +68,94 @@ public partial class MainWindow : Window
     /// <summary>Dock 是否被用户手动隐藏（区别于窗口 Visibility）。</summary>
     public bool IsDockVisible { get; private set; } = true;
 
+    /// <summary>全屏/演示模式下暂停图标动效，但保留滑入滑出（FR-603 / D7）。</summary>
+    public bool AnimationsPaused { get; set; }
+
+    /// <summary>组合根在窗口显示前绑定自动隐藏与快捷键，避免可见性状态竞态。</summary>
+    public void BindAutoHide(IAutoHideController autoHide, IHotkeyService hotkey)
+    {
+        _autoHide = autoHide;
+        _hotkey = hotkey;
+        autoHide.ApplyConfig(_current);
+    }
+
     public void ShowDock()
     {
         IsDockVisible = true;
-        Visibility = Visibility.Visible;
+        if (_autoHide is not null)
+        {
+            _autoHide.Show();
+        }
+        else
+        {
+            Visibility = Visibility.Visible;
+        }
     }
 
     public void HideDock()
     {
         IsDockVisible = false;
-        Visibility = Visibility.Collapsed;
         ClearHover();
+        if (_autoHide is not null)
+        {
+            _autoHide.Hide(force: true);
+        }
+        else
+        {
+            Visibility = Visibility.Collapsed;
+        }
+    }
+
+    // ---- IDockWindowHost -------------------------------------------------
+
+    public event EventHandler? PointerEntered;
+    public event EventHandler? PointerLeft;
+
+    public double HiddenDistance => (ActualHeight > 0 ? ActualHeight : 126) + 8;
+
+    public bool IsPointerOverDock => _pointerOver;
+
+    public void SetSlideOffset(double dip)
+    {
+        if (Math.Abs(_slideOffset - dip) < 0.01)
+        {
+            return;
+        }
+
+        _slideOffset = dip;
+        Top = _baseTop + dip;
+    }
+
+    public void SetVisible(bool visible)
+    {
+        IsDockVisible = visible;
+        Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    public void SetInteractive(bool interactive) => IsHitTestVisible = interactive;
+
+    private void OnRootMouseEnter(object sender, MouseEventArgs e)
+    {
+        _pointerOver = true;
+        PointerEntered?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void OnRootMouseLeave(object sender, MouseEventArgs e)
+    {
+        _pointerOver = false;
+        // 图标放大/水平位移会让命中边界瞬时缩回，产生 MouseLeave→MouseEnter 抖动。
+        // 延后一帧复核：若此时鼠标仍在 Root 内就不清空 hover，避免动画目标反复横跳。
+        Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
+        {
+            if (Root.IsMouseOver)
+            {
+                _pointerOver = true;
+                return;
+            }
+
+            ClearHover();
+            PointerLeft?.Invoke(this, EventArgs.Empty);
+        }));
     }
 
     /// <summary>配置热更新入口：外观、布局、动画参数全部即时生效（AC-09）。</summary>
@@ -98,6 +184,7 @@ public partial class MainWindow : Window
             config.Animation.SpeedMultiplier,
             reduced,
             config.Animation.Decay);
+        _animation.ConfigureMotion(config.Animation.IndicatorFadeMs, 180);
 
         // 尺寸 / 间距 / 形状变化必须重建可视化树，强制结构签名失效。
         _lastStructure = "";
@@ -130,12 +217,28 @@ public partial class MainWindow : Window
         if (string.Equals(structure, _lastStructure, StringComparison.Ordinal))
         {
             UpdateIcons(items);
+            SyncIndicators();
             return false;
         }
 
         _lastStructure = structure;
         RenderIcons(items);
+        SyncIndicators();
         return true;
+    }
+
+    /// <summary>把指示点目标状态同步给动画引擎；结构重建时新项直接就位，不集体淡入。</summary>
+    private void SyncIndicators()
+    {
+        var running = new bool[_iconControls.Count];
+        var foreground = new bool[_iconControls.Count];
+        for (int i = 0; i < _iconControls.Count; i++)
+        {
+            running[i] = _iconControls[i].IsRunning;
+            foreground[i] = _iconControls[i].IsForeground;
+        }
+
+        _animation.SetIndicatorStates(running, foreground);
     }
 
     /// <summary>只组装数据，不触碰可视化树；窗口标题变化也能在这里刷新到右键菜单。</summary>
@@ -282,6 +385,11 @@ public partial class MainWindow : Window
 
     private void OnIconEnter(DockIconControl control)
     {
+        if (AnimationsPaused)
+        {
+            return; // 独占全屏 3D：暂停所有图标动效（FR-603）
+        }
+
         int index = _iconControls.IndexOf(control);
         _animation.SetHover(index, _iconControls.Count,
             _current.Dock.IconSize, _current.Dock.IconSpacing);
@@ -295,10 +403,30 @@ public partial class MainWindow : Window
 
     private void OnAnimationFrame(object? sender, AnimationFrameEventArgs e)
     {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.InvokeAsync(() => OnAnimationFrame(sender, e));
+            return;
+        }
+
+        // 滑入滑出通道始终生效（全屏强制隐藏也依赖它），其余通道在全屏时暂停。
+        SetSlideOffset(e.SlideOffset);
+        if (AnimationsPaused)
+        {
+            return;
+        }
+
         int count = Math.Min(e.Scales.Length, _iconControls.Count);
         for (int i = 0; i < count; i++)
         {
-            _iconControls[i].SetFrame(e.Scales[i], e.Offsets[i]);
+            double bounce = e.BounceOffsets is not null && i < e.BounceOffsets.Length
+                ? e.BounceOffsets[i]
+                : 0;
+            _iconControls[i].SetFrame(e.Scales[i], e.Offsets[i], bounce);
+            if (e.IndicatorOpacity is not null && i < e.IndicatorOpacity.Length)
+            {
+                _iconControls[i].SetIndicatorFrame(e.IndicatorOpacity[i]);
+            }
         }
     }
 
@@ -379,8 +507,22 @@ public partial class MainWindow : Window
             return;
         }
 
-        if (item.Pinned is not null && !_launcher.Launch(item.Pinned))
+        if (item.Pinned is null)
         {
+            return;
+        }
+
+        // FR-202 / AC-03：点击未运行的应用，图标阻尼跳动 2 次（600ms）后启动。
+        // 启动失败立即停止，避免 600ms 无意义动画；窗口创建成功后由指示点淡入接棒。
+        if (_current.Animation.BounceEnabled)
+        {
+            _animation.Bounce(_iconControls.IndexOf(control),
+                _current.Dock.IconSize, _current.Animation.BounceCount);
+        }
+
+        if (!_launcher.Launch(item.Pinned))
+        {
+            _animation.StopBounce();
             _log.Warn(Module, Loc.Instance.T("Error_LaunchFailed"));
         }
     }
@@ -476,7 +618,8 @@ public partial class MainWindow : Window
         // 无论任务栏在顶部还是底部都成立（M0 实测本机为顶部）。
         Rect work = SystemParameters.WorkArea;
         Left = work.Left + ((work.Width - ActualWidth) / 2.0);
-        Top = work.Bottom - ActualHeight - _current.Dock.OffsetFromEdge;
+        _baseTop = work.Bottom - ActualHeight - _current.Dock.OffsetFromEdge;
+        Top = _baseTop + _slideOffset;
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
@@ -485,6 +628,10 @@ public partial class MainWindow : Window
         HwndSource? source = HwndSource.FromHwnd(handle);
         source?.AddHook(WndProc);
         TryApplyAcrylic(_current);
+
+        // 快捷键需要真实 HWND；ApplyConfig 先设定开关，Attach 再实际注册。
+        _hotkey?.ApplyConfig(_current);
+        _hotkey?.Attach(handle);
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -492,6 +639,11 @@ public partial class MainWindow : Window
         if (msg == unchecked((int)_taskbar.TaskbarCreatedMessage))
         {
             _taskbar.NotifyTaskbarCreated();
+        }
+        else if (msg == unchecked((int)NativeMethods.WM_HOTKEY))
+        {
+            _autoHide?.Toggle();
+            handled = true;
         }
 
         return IntPtr.Zero;
