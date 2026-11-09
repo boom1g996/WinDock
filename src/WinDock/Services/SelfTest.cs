@@ -222,6 +222,103 @@ public static class SelfTest
                 Loc.Instance.T("Menu_Pin") == "Pin to Dock",
                 $"实际={Loc.Instance.T("Menu_Pin")}");
             Loc.Instance.SetLanguage("zh-CN");
+
+            // 13~15. WD-016：拖拽排序、拖出移除、运行项转固定、重启后顺序保持（AC-06）
+            string dragDir = NewCase(root, "drag");
+            using (var service = new ConfigService(log, dragDir))
+            {
+                DockConfig dragConfig = service.Current;
+                dragConfig.Pinned.Clear();
+                foreach (string name in new[] { "A", "B", "C" })
+                {
+                    dragConfig.Pinned.Add(new PinnedItem
+                    {
+                        Id = name.ToLowerInvariant(),
+                        Path = $@"C:\Apps\{name}.exe",
+                        Name = name,
+                    });
+                }
+
+                service.Save(dragConfig);
+                var drag = new DockDragService(service, log);
+                drag.BeginDrag();
+                Check("拖拽进入状态", drag.IsDragging);
+                drag.Reorder(0, 3); // 插入位置允许等于 Count：A 追加到 C 之后
+                drag.EndDrag();
+                Check("固定项按落点重排",
+                    string.Join(",", service.Current.Pinned.Select(p => p.Name)) == "B,C,A",
+                    $"实际={string.Join(",", service.Current.Pinned.Select(p => p.Name))}");
+            }
+
+            using (var reread = new ConfigService(log, dragDir))
+            {
+                Check("AC-06 顺序重启后保持",
+                    string.Join(",", reread.Current.Pinned.Select(p => p.Name)) == "B,C,A");
+            }
+
+            using (var service = new ConfigService(log, NewCase(root, "drag-remove")))
+            {
+                var drag = new DockDragService(service, log);
+                service.Current.Pinned.Add(new PinnedItem { Id = "a", Path = @"C:\A.exe", Name = "A" });
+                service.Current.Pinned.Add(new PinnedItem { Id = "b", Path = @"C:\B.exe", Name = "B" });
+                drag.Remove(0);
+                drag.Reorder(9, 0);   // 越界必须忽略
+                drag.Remove(-1);
+                drag.Pin(0, @"C:\B.exe", "B alias"); // 同路径已固定：不产生重复项
+                Check("拖出移除 / 越界忽略 / 同路径不重复",
+                    service.Current.Pinned.Count == 1
+                    && service.Current.Pinned[0].Path == @"C:\B.exe",
+                    $"count={service.Current.Pinned.Count}");
+                drag.Pin(0, @"C:\D.exe", "D");
+                Check("运行项拖入固定区按落点插入",
+                    service.Current.Pinned.Count == 2
+                    && service.Current.Pinned[0].Name == "D",
+                    $"实际={string.Join(",", service.Current.Pinned.Select(p => p.Name))}");
+            }
+
+            // 16~19. WD-020：看门狗协议、恢复事件与缺失 exe 的安全降级
+            Check("看门狗阈值夹紧与心跳间隔",
+                WatchdogProtocol.ClampTimeout(50) == 1000
+                && WatchdogProtocol.ClampTimeout(999999) == 60000
+                && WatchdogProtocol.HeartbeatIntervalMs(10000) == 2000
+                && WatchdogProtocol.HeartbeatIntervalMs(1000) == 333);
+            Check("心跳 / 正常退出帧协议",
+                WatchdogProtocol.IsHeartbeat("H")
+                && WatchdogProtocol.IsShutdown("S")
+                && !WatchdogProtocol.IsHeartbeat("h")
+                && !WatchdogProtocol.IsShutdown("X"));
+            Check("管道名按宿主 PID 隔离",
+                WatchdogProtocol.PipeName(1) != WatchdogProtocol.PipeName(2)
+                && WatchdogProtocol.PipeName(42).EndsWith("42", StringComparison.Ordinal));
+
+            WatchdogRecoveryEvent recovery =
+                WatchdogProtocol.Create(1234, "host-exited", taskbarRestored: true, snapshotPresent: false);
+            WatchdogRecoveryEvent? decoded =
+                WatchdogProtocol.Deserialize(WatchdogProtocol.Serialize(recovery));
+            Check("恢复事件序列化往返",
+                decoded is not null && decoded.Pid == 1234
+                && decoded.Reason == "host-exited" && decoded.TaskbarRestored
+                && !decoded.SnapshotPresent);
+            Check("损坏恢复事件不抛异常",
+                WatchdogProtocol.Deserialize("{bad-json") is null);
+
+            using (var scheduler = new TimerScheduler(new SynchronizationContext()))
+            using (var watchdog = new WatchdogService(log, scheduler,
+                Path.Combine(root, "missing-watchdog.exe")))
+            {
+                watchdog.ApplyConfig(new DockConfig());
+                Check("看门狗 exe 缺失时安全降级", !watchdog.IsRunning);
+                watchdog.Heartbeat(); // 未连接时不得抛异常
+            }
+
+            // 20. 恢复提示中英资源
+            Loc.Instance.SetLanguage("zh-CN");
+            Check("恢复提示中文资源",
+                Loc.Instance.T("Tray_RecoveryTitle") == "WinDock 上次异常退出");
+            Loc.Instance.SetLanguage("en");
+            Check("恢复提示英文资源",
+                Loc.Instance.T("Tray_RecoveryTitle") == "WinDock exited unexpectedly");
+            Loc.Instance.SetLanguage("zh-CN");
         }
         catch (Exception ex)
         {

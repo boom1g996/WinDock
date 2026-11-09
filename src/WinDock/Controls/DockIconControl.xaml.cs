@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Effects;
 using WinDock.Core.Models;
 
 namespace WinDock.Controls;
@@ -11,6 +12,9 @@ public partial class DockIconControl : UserControl
 {
     private static readonly Brush ForegroundDot = CreateFrozenBrush(0xF2, 0xF4, 0xF8);
     private static readonly Brush BackgroundDot = CreateFrozenBrush(0xC4, 0xC9, 0xD2);
+
+    /// <summary>拖拽态投影（FR-302）；冻结后可在多个控件间安全共享。</summary>
+    private static readonly DropShadowEffect DragShadow = CreateFrozenShadow();
 
     private bool _running;
     private bool _foreground;
@@ -49,6 +53,19 @@ public partial class DockIconControl : UserControl
         return brush;
     }
 
+    private static DropShadowEffect CreateFrozenShadow()
+    {
+        var effect = new DropShadowEffect
+        {
+            BlurRadius = 14,
+            ShadowDepth = 4,
+            Opacity = 0.75,
+            Color = Colors.Black,
+        };
+        effect.Freeze();
+        return effect;
+    }
+
     public void ApplyConfig(DockConfig config)
     {
         double size = config.Dock.IconSize;
@@ -77,6 +94,26 @@ public partial class DockIconControl : UserControl
         _running = running;
         _foreground = foreground;
         Indicator.Fill = foreground ? ForegroundDot : BackgroundDot;
+    }
+
+    /// <summary>
+    /// WD-016 拖拽态：放大到 1.1、随鼠标轻微滞后移动（吸入感）、增强投影。
+    /// 拖拽期间 MainWindow 会跳过该控件的动画帧，避免两套变换互相覆盖。
+    /// </summary>
+    public void SetDragVisual(double scale, double offsetX)
+    {
+        Scale.ScaleX = scale;
+        Scale.ScaleY = scale;
+        Translate.X = offsetX;
+        Translate.Y = -4;
+        IconFrame.Effect = DragShadow;
+    }
+
+    /// <summary>结束拖拽：移除投影并把变换交回 AnimationEngine 收敛。</summary>
+    public void ClearDragVisual()
+    {
+        IconFrame.Effect = null;
+        SetFrame(1, 0, 0);
     }
 
     /// <summary>由动画帧驱动指示点：0→1 淡入并放大，1→0 淡出（FR-204）。</summary>

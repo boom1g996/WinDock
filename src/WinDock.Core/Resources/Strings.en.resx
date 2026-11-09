@@ -81,4 +81,6 @@
   <data name="Settings_PreviewEnabled" xml:space="preserve"><value>Show window previews on hover</value></data>
   <data name="Settings_ReplayGuide" xml:space="preserve"><value>Show guide on next start</value></data>
   <data name="Settings_GuideScheduled" xml:space="preserve"><value>Done. The first-run guide will appear the next time WinDock starts.</value></data>
+  <data name="Tray_RecoveryTitle" xml:space="preserve"><value>WinDock exited unexpectedly</value></data>
+  <data name="Tray_RecoveryText" xml:space="preserve"><value>The watchdog restored the native taskbar. In Beautify mode the taskbar was never hidden. Reopen Settings from the tray menu if needed.</value></data>
 </root>

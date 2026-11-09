@@ -78,7 +78,13 @@ public sealed class HotkeyService : IHotkeyService
 
         if (!UnregisterHotKey(_hwnd, HotkeyId))
         {
-            _log.Warn(Module, $"注销快捷键失败 Win32Error={Marshal.GetLastWin32Error()}");
+            int error = Marshal.GetLastWin32Error();
+            // 退出时 HWND 可能已销毁（ERROR_INVALID_WINDOW_HANDLE=1400），
+            // 系统会随窗口销毁自动释放热键登记，不算故障。
+            if (error != 1400)
+            {
+                _log.Warn(Module, $"注销快捷键失败 Win32Error={error}");
+            }
         }
 
         _registered = false;

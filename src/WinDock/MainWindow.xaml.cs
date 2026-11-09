@@ -19,13 +19,17 @@ namespace WinDock;
 /// Dock 主条（WD-006~009）：无边框胶囊、固定区/分隔符/运行区/空态、动画帧应用、
 /// 点击与右键交互。只依赖接口，具体实现由 App.xaml.cs 组合根注入。
 /// </summary>
-public partial class MainWindow : Window, IDockWindowHost
+public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
 {
     private const string Module = "Dock";
     private const string PreviewOpenKey = "preview.open";
     private const string PreviewCloseKey = "preview.close";
     private const string PreviewHoldReason = "preview";
     private const int PreviewCloseDelayMs = 300;
+
+    /// <summary>安装器 / 冒烟脚本的优雅退出请求（App.xaml 为 OnExplicitShutdown）。</summary>
+    private readonly uint _requestExitMessage =
+        NativeMethods.RegisterWindowMessage("WinDock.RequestExit.v1");
 
     private readonly IConfigService _config;
     private readonly ILogService _log;
@@ -44,6 +48,8 @@ public partial class MainWindow : Window, IDockWindowHost
     private IHotkeyService? _hotkey;
     private IPreviewService? _preview;
     private ITimerScheduler? _timers;
+    private DockDragController? _drag;
+    private DockConfig? _pendingConfig; // 拖拽期间到达的配置热更新，落点后再应用
     private PreviewWindow? _previewWindow;
     private string? _previewGroupKey;
     private double _baseTop;
@@ -68,6 +74,9 @@ public partial class MainWindow : Window, IDockWindowHost
         _animation.Frame += OnAnimationFrame;
         Root.MouseEnter += OnRootMouseEnter;
         Root.MouseLeave += OnRootMouseLeave;
+        // 拖拽手势：按下来自图标，移动/抬起统一由 Root 的捕获处理（WD-016）。
+        Root.PreviewMouseMove += (_, args) => _drag?.OnPreviewMouseMove(args);
+        Root.PreviewMouseLeftButtonUp += (_, args) => _drag?.OnPreviewMouseUp(args);
         KeyDown += OnWindowKeyDown;
         SourceInitialized += OnSourceInitialized;
 
@@ -111,6 +120,40 @@ public partial class MainWindow : Window, IDockWindowHost
         _preview = preview;
         _timers = timers;
         preview.ApplyConfig(_current);
+    }
+
+    /// <summary>组合根注入 WD-016 拖拽服务；控制器复用同一个延时调度器（不新增 Timer）。</summary>
+    public void BindDrag(IDockDragService drag, ITimerScheduler timers)
+    {
+        _drag = new DockDragController(this, drag, timers, _log);
+        drag.OrderChanged += (_, _) =>
+        {
+            _lastStructure = ""; // 顺序变化必须重建可视化树
+            RefreshItems();
+        };
+    }
+
+    // ---- IDockDragHost（显式实现，避免与 XAML 生成的 Root/IconsPanel 字段重名） ----
+
+    Grid IDockDragHost.Root => Root;
+    Panel IDockDragHost.IconsPanel => IconsPanel;
+    UIElement IDockDragHost.HitArea => Capsule;
+    DockConfig IDockDragHost.Config => _current;
+    void IDockDragHost.CancelPreview() => ClosePreview();
+    void IDockDragHost.ResetHover() => ClearHover();
+
+    void IDockDragHost.RefreshAfterDrop()
+    {
+        DockConfig? pending = _pendingConfig;
+        _pendingConfig = null;
+        if (pending is not null)
+        {
+            ApplyConfig(pending);
+            return;
+        }
+
+        _lastStructure = "";
+        RefreshItems();
     }
 
     public void ShowDock()
@@ -210,6 +253,14 @@ public partial class MainWindow : Window, IDockWindowHost
     /// <summary>配置热更新入口：外观、布局、动画参数全部即时生效（AC-09）。</summary>
     public void ApplyConfig(DockConfig config)
     {
+        if (_drag?.IsDragging == true)
+        {
+            // 拖拽中重建会销毁源控件、清空手势状态；记录待应用配置，落点后补做。
+            _pendingConfig = config;
+            return;
+        }
+
+        _drag?.Cancel(); // 非拖拽态的热更新：确保没有残留手势
         _current = config;
 
         byte alpha = (byte)Math.Round(Math.Clamp(config.Appearance.Opacity, 0, 1) * 255);
@@ -251,6 +302,11 @@ public partial class MainWindow : Window, IDockWindowHost
     /// <summary>窗口枚举事件 / 配置变更后的重建入口（UI 线程安全）。</summary>
     public void RefreshItems()
     {
+        if (_drag?.IsDragging == true)
+        {
+            return; // 拖拽期间窗口枚举变化不重建；RefreshAfterDrop 会补一次
+        }
+
         if (!Dispatcher.CheckAccess())
         {
             Dispatcher.InvokeAsync(RefreshItems);
@@ -387,6 +443,7 @@ public partial class MainWindow : Window, IDockWindowHost
 
     private void RenderIcons(List<DockItem> items)
     {
+        _drag?.Cancel(); // 结构重建会销毁拖拽源控件
         ClosePreview(); // 结构重建会销毁悬停的图标控件，先注销缩略图
         IconsPanel.Children.Clear();
         _iconControls.Clear();
@@ -430,6 +487,8 @@ public partial class MainWindow : Window, IDockWindowHost
             control.Margin = new Thickness(config.Dock.IconSpacing / 2.0, 0,
                 config.Dock.IconSpacing / 2.0, 0);
             control.MouseEnter += (_, _) => OnIconEnter(control);
+            control.PreviewMouseLeftButtonDown += (_, args) =>
+                _drag?.OnPreviewMouseDown(control, args);
             control.PreviewMouseUp += (_, args) => OnIconMouseUp(control, args);
             control.KeyDown += OnIconKeyDown;
             IconsPanel.Children.Add(control);
@@ -594,7 +653,8 @@ public partial class MainWindow : Window, IDockWindowHost
 
         // 滑入滑出通道始终生效（全屏强制隐藏也依赖它），其余通道在全屏时暂停。
         SetSlideOffset(e.SlideOffset);
-        if (AnimationsPaused)
+        // 拖拽期间源图标的 1.1 倍跟随由 DockDragController 独占，动画帧不得覆盖。
+        if (AnimationsPaused || _drag?.IsDragging == true)
         {
             return;
         }
@@ -615,6 +675,14 @@ public partial class MainWindow : Window, IDockWindowHost
 
     private void OnIconMouseUp(DockIconControl control, MouseButtonEventArgs e)
     {
+        if (_drag?.SuppressClick == true)
+        {
+            // 通用 PreviewMouseUp 可能早于控制器的 PreviewMouseLeftButtonUp，
+            // 这里先行拦截，避免拖放结束顺带启动/激活应用。
+            e.Handled = true;
+            return;
+        }
+
         bool controlModifier = (Keyboard.Modifiers & ModifierKeys.Control) != 0;
         if (e.ChangedButton == MouseButton.Right
             || (e.ChangedButton == MouseButton.Left && controlModifier))
@@ -762,6 +830,13 @@ public partial class MainWindow : Window, IDockWindowHost
             return;
         }
 
+        if (_drag?.IsDragging == true)
+        {
+            _drag.Cancel();
+            e.Handled = true;
+            return;
+        }
+
         foreach (DockIconControl control in _iconControls)
         {
             if (control.ContextMenu?.IsOpen == true)
@@ -826,6 +901,12 @@ public partial class MainWindow : Window, IDockWindowHost
         else if (msg == unchecked((int)NativeMethods.WM_HOTKEY))
         {
             _autoHide?.Toggle();
+            handled = true;
+        }
+        else if (msg == unchecked((int)_requestExitMessage))
+        {
+            // 延后到消息处理结束再退出，保证 OnExit 的看门狗 S 握手正常执行。
+            Dispatcher.BeginInvoke(new Action(() => Application.Current.Shutdown()));
             handled = true;
         }
 

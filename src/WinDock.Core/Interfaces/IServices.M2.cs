@@ -91,12 +91,20 @@ public interface IFullScreenDetector : IDisposable
     event EventHandler<bool>? StateChanged;
 }
 
-/// <summary>固定项拖拽重排与拖出取消固定；顺序写回 IConfigService（AC-06）。</summary>
+/// <summary>
+/// 固定项拖拽重排与拖出取消固定；顺序写回 IConfigService（AC-06 / FR-302）。
+/// 索引均为 <c>DockConfig.Pinned</c> 的列表索引（含 separator 项），
+/// <c>toIndex</c> / <c>insertIndex</c> 是「插入位置」语义，允许等于 Count。
+/// </summary>
 public interface IDockDragService
 {
     bool IsDragging { get; }
+    void BeginDrag();
+    void EndDrag();
     void Reorder(int fromIndex, int toIndex);
     void Remove(int index);
+    /// <summary>运行项拖入固定区转固定；同路径已固定时改为移动到落点，不产生重复项。</summary>
+    void Pin(int insertIndex, string path, string name);
     event EventHandler? OrderChanged;
 }
 
@@ -117,9 +125,15 @@ public interface IIconCache
     void Clear();
 }
 
-/// <summary>独立进程看门狗与心跳（AC-11 / WD-020）。</summary>
+/// <summary>
+/// 独立进程看门狗与心跳（AC-11 / WD-020 / D8）。
+/// 心跳由 UI 线程的唯一 ITimerScheduler 派发：UI 卡死即心跳停摆，
+/// 看门狗可以据此判定「无响应」，而不只是「进程退出」。
+/// </summary>
 public interface IWatchdogService : IDisposable
 {
+    bool IsRunning { get; }
+    void ApplyConfig(DockConfig config);
     void Start();
     void Stop();
     void Heartbeat();

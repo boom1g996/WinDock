@@ -58,6 +58,11 @@ u32.SetForegroundWindow.argtypes = [wintypes.HWND]
 u32.keybd_event.argtypes = [ctypes.c_ubyte, ctypes.c_ubyte, wintypes.DWORD, ctypes.c_size_t]
 u32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
 u32.PostMessageW.restype = wintypes.BOOL
+u32.mouse_event.argtypes = [wintypes.DWORD, wintypes.DWORD, wintypes.DWORD,
+                            wintypes.DWORD, ctypes.c_size_t]
+MOUSEEVENTF_LEFTDOWN = 0x0002
+MOUSEEVENTF_LEFTUP = 0x0004
+RECOVERY = Path.home() / "AppData" / "Local" / "WinDock" / "watchdog-recovery.json"
 k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
 k32.OpenProcess.restype = wintypes.HANDLE
 k32.GetProcessTimes.argtypes = [wintypes.HANDLE] + [ctypes.POINTER(FILETIME)] * 4
@@ -157,6 +162,39 @@ def existing_pid() -> int | None:
     return None
 
 
+def process_pids(image: str) -> list[int]:
+    """按映像名列出进程；WD-020 用 WinDock.Watchdog.exe 核验守护进程存活。"""
+    try:
+        output = subprocess.run(
+            ["tasklist", "/FI", f"IMAGENAME eq {image}", "/FO", "CSV", "/NH"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20,
+        ).stdout
+    except (OSError, subprocess.SubprocessError):
+        return []
+    pids: list[int] = []
+    for line in output.splitlines():
+        if image not in line:
+            continue
+        parts = [p.strip('"') for p in line.split('","')]
+        if len(parts) >= 2 and parts[1].isdigit():
+            pids.append(int(parts[1]))
+    return pids
+
+
+def read_recovery() -> dict | None:
+    try:
+        if not RECOVERY.is_file():
+            return None
+        return json.loads(RECOVERY.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def pinned_names(cfg: dict) -> list[str]:
+    return [str(p.get("name") or p.get("path") or p.get("id"))
+            for p in cfg.get("pinned", []) if isinstance(p, dict)]
+
+
 def parse_log_time(line: str):
     match = re.search(r"\] (\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3})", line)
     if not match:
@@ -201,6 +239,10 @@ def main() -> int:
                     help="WD-014: hover Dock icons and verify the DWM preview panel opens/closes")
     ap.add_argument("--park-cursor", action="store_true",
                     help="move the cursor to a neutral area during idle CPU sampling (8.1 definition)")
+    ap.add_argument("--test-drag", action="store_true",
+                    help="WD-016: synthesize a pointer drag and verify Pinned order is persisted")
+    ap.add_argument("--test-watchdog", action="store_true",
+                    help="WD-020: kill DockHost and verify the watchdog restores the taskbar within 10s")
     args = ap.parse_args()
     sample_seconds = max(1.0, args.sample_seconds)
     result_path = Path(args.output) if args.output else RESULT
@@ -406,9 +448,169 @@ def main() -> int:
             w.get("title") == "WinDock Preview" and w["visible"]
             for w in windows_of(pid))
 
+    # WD-016：合成「按下 → 移动 → 抬起」，校验 Pinned 顺序写回 config.json（AC-06）。
+    if args.test_drag:
+        drag: dict = {"enabled": True}
+        original_cfg = None
+        try:
+            original_cfg = json.loads(config_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            pass
+        cfg = dict(original_cfg or {})
+        names_before = pinned_names(cfg)
+        if len(names_before) < 2:
+            # 用系统自带且确实存在的 exe，避免误点击时额外产生 Launcher ERROR。
+            apps = [
+                ("SmokeA", r"C:\Windows\System32\notepad.exe"),
+                ("SmokeB", r"C:\Windows\System32\cmd.exe"),
+                ("SmokeC", r"C:\Windows\explorer.exe"),
+            ]
+            cfg["pinned"] = [
+                {"id": f"smoke-{i}", "type": "app", "path": path,
+                 "args": "", "aumid": "", "name": name}
+                for i, (name, path) in enumerate(apps)
+            ]
+            config_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+            drag["seeded_pinned"] = True
+            time.sleep(1.2)  # 等配置热更新重建图标树
+            names_before = pinned_names(cfg)
+        drag["pinned_before"] = names_before
+
+        screen_w = u32.GetSystemMetrics(0)
+        screen_h = u32.GetSystemMetrics(1)
+        # 自动隐藏后 Dock 的 HWND 仍存在但 rect 已滑出屏幕；必须先把光标压到
+        # 底边热区等滑入完成，并校验 rect 在屏幕内，否则合成点击会落到屏幕外。
+        u32.SetCursorPos(screen_w // 2, screen_h - 1)
+        time.sleep(0.9)
+
+        def dock_in_screen() -> list[dict]:
+            return [w for w in windows_of(pid)
+                    if w["visible"] and is_dock_window(w)
+                    and w["rect"][1] >= -4 and w["rect"][3] <= screen_h + 4]
+
+        visible_dock = dock_in_screen()
+        if not visible_dock:
+            time.sleep(0.7)
+            visible_dock = dock_in_screen()
+        drag["dock_rect"] = visible_dock[0]["rect"] if visible_dock else None
+
+        if visible_dock:
+            left, top, right, bottom = visible_dock[0]["rect"]
+            y = bottom - max(24, min(45, (bottom - top) // 2))
+            x0, x1 = left + 62, left + 62 + 125  # 第一个图标中心 → 第三个图标右侧
+            u32.SetCursorPos(x0, y)
+            time.sleep(0.4)
+            u32.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+            for step in range(1, 9):
+                u32.SetCursorPos(int(x0 + (x1 - x0) * step / 8), y)
+                time.sleep(0.05)
+            time.sleep(0.3)
+            u32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+            time.sleep(1.0)
+            drag["drag_points"] = [[x0, y], [x1, y]]
+        else:
+            drag["dock_not_visible"] = True
+
+        try:
+            names_after = pinned_names(json.loads(config_path.read_text(encoding="utf-8")))
+            drag["pinned_after"] = names_after
+            drag["order_changed"] = (names_after != names_before
+                                     and len(names_after) == len(names_before))
+        except (OSError, ValueError) as exc:
+            drag["read_error"] = str(exc)
+            drag["order_changed"] = False
+        # 只认本次启动之后的日志，避免把 --selftest 写下的「固定项重排」当成实机证据。
+        recent = [line for line in read_log_tail(160)
+                  if (stamp := parse_log_time(line)) is not None and stamp >= started_at]
+        drag["log_has_drag"] = any("开始拖拽" in line or "固定项重排" in line
+                                   for line in recent)
+        if drag.get("seeded_pinned") and original_cfg is not None:
+            config_path.write_text(json.dumps(original_cfg, ensure_ascii=False, indent=2),
+                                   encoding="utf-8")
+            time.sleep(0.6)
+            drag["config_restored"] = True
+        report["drag"] = drag
+        report["drag_order_changed"] = bool(drag.get("order_changed"))
+
+    # WD-020：强杀主进程 → 守护进程发现宿主消失 → 恢复任务栏 + 写恢复事件 → 自行退出。
+    # 随后重启并优雅退出，验证 S 握手不会把正常退出误判为崩溃。
+    if args.test_watchdog:
+        wd: dict = {"enabled": True}
+        wd["watchdog_pids_before"] = process_pids("WinDock.Watchdog.exe")
+        before_mtime = RECOVERY.stat().st_mtime if RECOVERY.is_file() else None
+        wd["recovery_before"] = read_recovery()
+
+        subprocess.run(["taskkill", "/PID", str(pid), "/F"],
+                       capture_output=True, text=True, timeout=20)
+        deadline = time.monotonic() + 10.0
+        event = None
+        while time.monotonic() < deadline:
+            now_mtime = RECOVERY.stat().st_mtime if RECOVERY.is_file() else None
+            if now_mtime is not None and now_mtime != before_mtime:
+                event = read_recovery()
+                if event:
+                    break
+            time.sleep(0.4)
+        wd["recovery_after"] = event
+        wd["recovery_detected"] = event is not None
+        wd["recovery_reason"] = event.get("reason") if event else None
+
+        for _ in range(12):
+            if not process_pids("WinDock.Watchdog.exe"):
+                break
+            time.sleep(0.4)
+        wd["watchdog_pids_after_crash"] = process_pids("WinDock.Watchdog.exe")
+        wd["watchdog_exited"] = not wd["watchdog_pids_after_crash"]
+        wd["log_has_recovery"] = "判定失联" in "\n".join(read_log_tail(80))
+
+        # 正常退出握手：重启的 Dock 会消费恢复事件（托盘气泡），WM_CLOSE 应让
+        # 看门狗收到 S 帧后直接退出，不再生成新的恢复事件。
+        after_crash_mtime = RECOVERY.stat().st_mtime if RECOVERY.is_file() else None
+        clean = subprocess.Popen([str(exe)], cwd=str(exe.parent))
+        time.sleep(3.0)
+        wd["clean_shutdown_pid"] = clean.pid
+        wd["clean_watchdog_pids"] = process_pids("WinDock.Watchdog.exe")
+        wd["clean_dock_windows"] = len(
+            [w for w in windows_of(clean.pid) if is_dock_window(w)])
+        # App.xaml 为 OnExplicitShutdown，WM_CLOSE 关主窗口不会结束进程；
+        # 用受控的 --exit IPC 走 Application.Shutdown → OnExit → 看门狗 S 帧。
+        subprocess.run([str(exe), "--exit"], cwd=str(exe.parent),
+                       capture_output=True, text=True, timeout=20)
+        wd["clean_exit_command"] = True
+        for _ in range(12):
+            if clean.poll() is not None:
+                break
+            time.sleep(0.4)
+        time.sleep(1.0)
+        clean_mtime = RECOVERY.stat().st_mtime if RECOVERY.is_file() else None
+        wd["clean_shutdown_exited"] = clean.poll() is not None
+        wd["clean_shutdown_no_recovery"] = (clean_mtime is None
+                                            or clean_mtime == after_crash_mtime)
+        wd["clean_watchdog_exited"] = not process_pids("WinDock.Watchdog.exe")
+        if clean.poll() is None:
+            subprocess.run(["taskkill", "/PID", str(clean.pid), "/F"],
+                           capture_output=True, text=True, timeout=20)
+            wd["clean_shutdown_forced_kill"] = True
+
+        report["watchdog"] = wd
+        report["watchdog_recovery_detected"] = bool(wd["recovery_detected"])
+        report["watchdog_process_exited"] = bool(wd["watchdog_exited"])
+        report["watchdog_clean_shutdown"] = bool(
+            wd["clean_shutdown_exited"] and wd["clean_shutdown_no_recovery"]
+            and wd["clean_watchdog_exited"])
+
+    # 采样之后拖拽 / 看门狗用例仍会写日志，收尾再查一次本次启动后的 ERROR。
+    report["log_errors_late"] = [
+        line for line in read_log_tail(200)
+        if "][ERROR]" in line
+        and (stamp := parse_log_time(line)) is not None
+        and stamp >= started_at
+    ]
+
     ok = (report["dock_window_present"]
           and report["early_exit_code"] is None
-          and not report["log_errors"])
+          and not report["log_errors"]
+          and not report["log_errors_late"])
     if args.test_autohide:
         ok = ok and report["auto_hidden"] and report["autohide_restore"]
     if args.test_guide:
@@ -420,7 +622,19 @@ def main() -> int:
     if args.test_preview:
         ok = ok and report.get("preview_window_present") is True
         ok = ok and report.get("preview_closed_on_leave") is True
+    if args.test_drag:
+        ok = ok and report.get("drag_order_changed") is True
+    if args.test_watchdog:
+        ok = ok and report.get("watchdog_recovery_detected") is True
+        ok = ok and report.get("watchdog_process_exited") is True
+        ok = ok and report.get("watchdog_clean_shutdown") is True
     report["verdict"] = "PASS" if ok else "FAIL"
+
+    # 看门狗用例必须强杀主进程；验证完把 Dock 重新拉起，保持桌面可用状态。
+    if args.test_watchdog and not args.kill:
+        final = subprocess.Popen([str(exe)], cwd=str(exe.parent))
+        time.sleep(2.0)
+        report["final_dock_pid"] = final.pid
     if args.park_cursor:
         u32.SetCursorPos(*original_cursor)
         report["cursor_restored"] = True

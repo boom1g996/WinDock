@@ -18,7 +18,7 @@ $artifacts = Join-Path $root 'artifacts'
 $tfm = 'net10.0-windows'
 
 if ($Clean) {
-    foreach ($project in @('WinDock.Core', 'WinDock', 'WinDock.Settings')) {
+    foreach ($project in @('WinDock.Core', 'WinDock', 'WinDock.Settings', 'WinDock.Watchdog')) {
         $bin = Join-Path $root "src\$project\bin"
         $obj = Join-Path $root "src\$project\obj"
         if (Test-Path $bin) { Remove-Item $bin -Recurse -Force }
@@ -48,7 +48,8 @@ if ($Publish) {
     $fxOutput = Join-Path $artifacts 'WinDock-framework-dependent'
     $projectFiles = @(
         (Join-Path $root 'src\WinDock\WinDock.csproj'),
-        (Join-Path $root 'src\WinDock.Settings\WinDock.Settings.csproj')
+        (Join-Path $root 'src\WinDock.Settings\WinDock.Settings.csproj'),
+        (Join-Path $root 'src\WinDock.Watchdog\WinDock.Watchdog.csproj')
     )
 
     Write-Host "==> publish: self-contained single file ($Runtime)"

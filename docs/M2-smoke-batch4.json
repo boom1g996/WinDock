@@ -1,0 +1,156 @@
+{
+  "timestamp": "2026-11-09T18:04:42",
+  "exe": "D:\\workspace\\W&dock\\artifacts\\WinDock-framework-dependent\\DockHost.exe",
+  "cursor_original": [
+    554,
+    846
+  ],
+  "early_exit_code": null,
+  "pid": 8144,
+  "started_new_process": true,
+  "windows": [
+    {
+      "hwnd": 986276,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1118,
+        1792,
+        1120
+      ],
+      "size": [
+        1792,
+        2
+      ],
+      "visible": true
+    }
+  ],
+  "visible_window_count": 1,
+  "dock_window_present": true,
+  "auto_hidden": true,
+  "hotzone_windows": [
+    {
+      "hwnd": 986276,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1118,
+        1792,
+        1120
+      ],
+      "size": [
+        1792,
+        2
+      ],
+      "visible": true
+    }
+  ],
+  "cursor_parked": [
+    10,
+    200
+  ],
+  "settle_seconds": 6.0,
+  "cold_start_cpu_seconds": 1.453,
+  "sample_seconds": 12.0,
+  "idle_cpu_percent": 0.911,
+  "working_set_mb": 209.04,
+  "log_errors": [],
+  "log_tail": [
+    "[Drag][INFO] 2026-11-09 18:04:22.748 取消固定 A",
+    "[Drag][INFO] 2026-11-09 18:04:22.775 固定 D",
+    "[Watchdog][WARN] 2026-11-09 18:04:22.786 未找到 C:\\Users\\***\\AppData\\Local\\Temp\\WinDock.SelfTest.9efbe7148bf04ff498fb1438f32d1bb3\\missing-watchdog.exe，看门狗降级为关闭（发布产物需包含 WinDock.Watchdog.exe）",
+    "[App][INFO] 2026-11-09 18:04:22.796 WinDock 退出",
+    "[App][INFO] 2026-11-09 18:04:44.053 WinDock 启动",
+    "[Icon][INFO] 2026-11-09 18:04:44.067 PrivateExtractIconsW 导出可用=True；磁盘缓存启用=True",
+    "[AutoHide][INFO] 2026-11-09 18:04:44.342 自动隐藏=True, 延迟=800ms, 全屏隐藏=True",
+    "[WindowEnum][INFO] 2026-11-09 18:04:44.422 事件钩子就绪，初始聚合 7 个应用",
+    "[Dock][INFO] 2026-11-09 18:04:44.616 已尝试启用系统 Acrylic 背板（分层窗口下可能被系统忽略）",
+    "[Hotkey][INFO] 2026-11-09 18:04:44.620 全局快捷键 Ctrl+Alt+D 已注册",
+    "[Watchdog][INFO] 2026-11-09 18:04:44.770 看门狗已启动 pid=32496，阈值=10000ms，心跳间隔=2000ms",
+    "[Watchdog][INFO] 2026-11-09 18:04:44.879 启动：宿主 pid=8144，失联阈值=10000ms"
+  ],
+  "preview_dock_visible_before_hover": true,
+  "preview_window_present": true,
+  "preview_window_rect": [
+    630,
+    878,
+    820,
+    1032
+  ],
+  "preview_hover_point": [
+    741,
+    1067
+  ],
+  "preview_closed_on_leave": true,
+  "drag": {
+    "enabled": true,
+    "seeded_pinned": true,
+    "pinned_before": [
+      "SmokeA",
+      "SmokeB",
+      "SmokeC"
+    ],
+    "dock_rect": [
+      561,
+      986,
+      1231,
+      1112
+    ],
+    "drag_points": [
+      [
+        623,
+        1067
+      ],
+      [
+        748,
+        1067
+      ]
+    ],
+    "pinned_after": [
+      "SmokeB",
+      "SmokeC",
+      "SmokeA"
+    ],
+    "order_changed": true,
+    "log_has_drag": true,
+    "config_restored": true
+  },
+  "drag_order_changed": true,
+  "watchdog": {
+    "enabled": true,
+    "watchdog_pids_before": [
+      32496
+    ],
+    "recovery_before": null,
+    "recovery_after": {
+      "pid": 8144,
+      "reason": "pipe-closed",
+      "utc": "2026-11-09T10:05:10.5767499+00:00",
+      "taskbarRestored": true,
+      "snapshotPresent": false
+    },
+    "recovery_detected": true,
+    "recovery_reason": "pipe-closed",
+    "watchdog_pids_after_crash": [],
+    "watchdog_exited": true,
+    "log_has_recovery": true,
+    "clean_shutdown_pid": 24744,
+    "clean_watchdog_pids": [
+      23828
+    ],
+    "clean_dock_windows": 4,
+    "clean_exit_command": true,
+    "clean_shutdown_exited": true,
+    "clean_shutdown_no_recovery": true,
+    "clean_watchdog_exited": true
+  },
+  "watchdog_recovery_detected": true,
+  "watchdog_process_exited": true,
+  "watchdog_clean_shutdown": true,
+  "log_errors_late": [],
+  "verdict": "PASS",
+  "final_dock_pid": 32812,
+  "cursor_restored": true
+}

@@ -4,6 +4,7 @@ using WinForms = System.Windows.Forms;
 using WinDock.Core;
 using WinDock.Core.Interfaces;
 using WinDock.Core.Models;
+using WinDock.Core.Services;
 
 namespace WinDock.Services;
 
@@ -49,6 +50,35 @@ public sealed class TrayService : IDisposable
             Visible = true,
         };
         _icon.DoubleClick += (_, _) => _openSettings();
+    }
+
+    /// <summary>
+    /// WD-020：读取看门狗留下的恢复事件，弹一次托盘气泡后删除标记。
+    /// 守护进程本身不创建窗口/托盘（D8 不提权、不注入），提示由主进程下次启动补上。
+    /// </summary>
+    public void NotifyRecovery()
+    {
+        WatchdogRecoveryEvent? recovery = WatchdogProtocol.ReadRecovery();
+        if (recovery is null)
+        {
+            return;
+        }
+
+        WatchdogProtocol.ClearRecovery();
+        _log.Warn(Module,
+            $"上次异常退出已由看门狗处理：pid={recovery.Pid}, reason={recovery.Reason}, "
+            + $"taskbarRestored={recovery.TaskbarRestored}, snapshot={recovery.SnapshotPresent}");
+        try
+        {
+            _icon.ShowBalloonTip(5000,
+                Loc.Instance.T("Tray_RecoveryTitle"),
+                Loc.Instance.T("Tray_RecoveryText"),
+                WinForms.ToolTipIcon.Warning);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            _log.Warn(Module, $"托盘气泡显示失败：{ex.Message}");
+        }
     }
 
     public void ApplyConfig(DockConfig config)

@@ -81,4 +81,6 @@
   <data name="Settings_PreviewEnabled" xml:space="preserve"><value>悬停显示窗口缩略图</value></data>
   <data name="Settings_ReplayGuide" xml:space="preserve"><value>下次启动显示引导</value></data>
   <data name="Settings_GuideScheduled" xml:space="preserve"><value>已设置：下次启动 WinDock 时会重新显示首次引导。</value></data>
+  <data name="Tray_RecoveryTitle" xml:space="preserve"><value>WinDock 上次异常退出</value></data>
+  <data name="Tray_RecoveryText" xml:space="preserve"><value>看门狗已自动恢复原生任务栏（当前为「仅美化」模式，任务栏本就未被隐藏）。如有需要可在托盘菜单重新打开设置。</value></data>
 </root>

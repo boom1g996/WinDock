@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>WinDock.Watchdog</RootNamespace>
+    <AssemblyName>WinDock.Watchdog</AssemblyName>
+    <!-- 看门狗是纯后台进程：不加载 WPF / WinForms UI 栈，也不创建任何窗口。 -->
+    <UseWPF>false</UseWPF>
+    <UseWindowsForms>false</UseWindowsForms>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\WinDock.Core\WinDock.Core.csproj" />
+  </ItemGroup>
+</Project>

@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Threading;
 using WinDock.Core;
 using WinDock.Core.Interfaces;
+using WinDock.Core.Native;
 using WinDock.Core.Services;
 using WinDock.Services;
 
@@ -40,9 +41,49 @@ public partial class App : Application
     private IPreviewService? _preview;
     private IStartupGuide? _guide;
 
+    // M2 第四批：拖拽排序 / 独立进程看门狗
+    private IDockDragService? _drag;
+    private IWatchdogService? _watchdog;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        if (Array.Exists(e.Args,
+                a => string.Equals(a, "--exit", StringComparison.OrdinalIgnoreCase)))
+        {
+            // 安装器 / 冒烟脚本请求常驻实例优雅退出：向该进程的**每个顶层窗口**
+            // 定向投递注册消息，由主窗口走 Application.Shutdown → OnExit →
+            // WatchdogService.Stop() 发出 S 帧。App.xaml 为 OnExplicitShutdown，
+            // WM_CLOSE 关主窗口不会结束进程；HWND_BROADCAST 实测到不了隐藏的
+            // 自动隐藏窗口（18:00 实机），因此不能只广播。
+            uint message = NativeMethods.RegisterWindowMessage("WinDock.RequestExit.v1");
+            int self = Environment.ProcessId;
+            foreach (Process process in Process.GetProcessesByName("DockHost"))
+            {
+                if (process.Id == self)
+                {
+                    process.Dispose();
+                    continue;
+                }
+
+                uint target = (uint)process.Id;
+                NativeMethods.EnumWindows((hwnd, _) =>
+                {
+                    NativeMethods.GetWindowThreadProcessId(hwnd, out uint owner);
+                    if (owner == target)
+                    {
+                        NativeMethods.PostMessage(hwnd, message, IntPtr.Zero, IntPtr.Zero);
+                    }
+
+                    return true;
+                }, IntPtr.Zero);
+                process.Dispose();
+            }
+
+            Shutdown(0);
+            return;
+        }
 
         _mutex = new Mutex(initiallyOwned: true, MutexName, out bool createdNew);
         if (!createdNew)
@@ -85,6 +126,8 @@ public partial class App : Application
         IAppLauncher launcher = new AppLauncher(_log);
         _preview = new PreviewService(_log);
         _guide = new StartupGuide(_config, _log);
+        IDockDragService drag = new DockDragService(_config, _log);
+        _drag = drag;
 
         _dock = new MainWindow(_config, _log, _taskbar, _enumerator,
             icons, _animation, launcher);
@@ -94,6 +137,7 @@ public partial class App : Application
         // 延时只走这一个 TimerScheduler，动效只走这一个 AnimationEngine（M2 D3）。
         _timers = new TimerScheduler(SynchronizationContext.Current, _log);
         _dock.BindPreview(_preview, _timers);
+        _dock.BindDrag(drag, _timers);
         _hotZone = new HotZone(_log);
         _fullScreen = new FullScreenDetector(_log, _timers, SynchronizationContext.Current);
         _hotkey = new HotkeyService(_log);
@@ -118,6 +162,11 @@ public partial class App : Application
         _tray.ApplyConfig(_config.Current);
         StartupRegistry.Apply(_config.Current.General.LaunchAtStartup, _log);
         _fullScreen.Start();
+
+        // WD-020：默认开启；exe 缺失时服务内部降级为关闭并写 WARN，不阻断 Dock。
+        _watchdog = new WatchdogService(_log, _timers);
+        _watchdog.ApplyConfig(_config.Current);
+        _tray?.NotifyRecovery(); // 上次异常退出由看门狗留下的提示，读完即删
 
         if (_guide?.ShouldShow(_config.Current) == true)
         {
@@ -163,6 +212,8 @@ public partial class App : Application
             _log?.Error("App", "退出时恢复任务栏失败", ex);
         }
 
+        _watchdog?.Stop();    // 先发 S 帧，避免看门狗把正常退出误判为崩溃
+        _watchdog?.Dispose();
         _autoHide?.Dispose();
         _preview?.Dispose(); // FR-404：退出时兜底注销全部 DWM 缩略图句柄
         _fullScreen?.Dispose();
@@ -188,11 +239,20 @@ public partial class App : Application
 
     private void OnConfigChanged(object? sender, ConfigChangedEventArgs args)
     {
+        // ConfigService 的 FileSystemWatcher 回调在线程池 Timer 线程上，
+        // 而 ApplyConfig 会改 WPF 依赖对象（Capsule / 图标树）。
+        // M2 第四批实机冒烟：外部改 config.json 曾因此抛 InvalidOperationException。
+        Dispatcher.InvokeAsync(() => ApplyConfigOnUiThread(args));
+    }
+
+    private void ApplyConfigOnUiThread(ConfigChangedEventArgs args)
+    {
         Loc.Instance.SetLanguage(args.Config.General.Language);
         _dock?.ApplyConfig(args.Config);
         _tray?.ApplyConfig(args.Config);
         _autoHide?.ApplyConfig(args.Config);
         _hotkey?.ApplyConfig(args.Config);
+        _watchdog?.ApplyConfig(args.Config); // 开关 / 失联阈值热更新
         if (_log is not null)
         {
             StartupRegistry.Apply(args.Config.General.LaunchAtStartup, _log);
