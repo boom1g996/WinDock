@@ -1,0 +1,207 @@
+{
+  "host": {
+    "platform": "Windows-11-10.0.26200-SP0",
+    "build": "10.0.26200",
+    "architecture": "AMD64",
+    "python": "3.13.14",
+    "is_admin": false,
+    "remote_session": false
+  },
+  "dwm": {
+    "composition_enabled": true,
+    "hr": "0x0",
+    "build_number": 26200,
+    "system_backdrop_supported_by_build": true,
+    "backdrop_attr_probe": {
+      "value": 0,
+      "hr": "0x0"
+    }
+  },
+  "notification_state": {
+    "value": 5,
+    "name": "QUNS_ACCEPTS_NOTIFICATIONS",
+    "hr": "0x0"
+  },
+  "native_taskbar": {
+    "hwnd": 65986,
+    "rect": [
+      0,
+      0,
+      1792,
+      48
+    ],
+    "size": [
+      1792,
+      48
+    ],
+    "appbar_getstate": 0,
+    "all_tray_windows": [
+      {
+        "hwnd": 65986,
+        "class": "Shell_TrayWnd",
+        "rect": [
+          0,
+          0,
+          1792,
+          48
+        ],
+        "size": [
+          1792,
+          48
+        ],
+        "inferred_edge": "top"
+      },
+      {
+        "hwnd": 66008,
+        "class": "Shell_SecondaryTrayWnd",
+        "rect": [
+          -1920,
+          0,
+          0,
+          48
+        ],
+        "size": [
+          1920,
+          48
+        ],
+        "inferred_edge": "top"
+      }
+    ]
+  },
+  "displays": {
+    "count": 2,
+    "monitors": [
+      {
+        "rect": [
+          0,
+          0,
+          1792,
+          1120
+        ],
+        "size": [
+          1792,
+          1120
+        ],
+        "effective_dpi": 96,
+        "dpi_hr": "0x0"
+      },
+      {
+        "rect": [
+          -1920,
+          0,
+          0,
+          1080
+        ],
+        "size": [
+          1920,
+          1080
+        ],
+        "effective_dpi": 96,
+        "dpi_hr": "0x0"
+      }
+    ]
+  },
+  "appearance": {
+    "apps_light_theme": 1,
+    "colorization_color": 3293603699
+  },
+  "windows": {
+    "top_level_total": 425,
+    "visible": 28,
+    "cloaked_filtered_out": 12,
+    "toolwindow_filtered_out": 8,
+    "enumerable_classes": {
+      "Chrome_WidgetWin_1": 4,
+      "DingImgViewWnd": 1,
+      "StandardFrame_DingTalk": 1,
+      "FLUTTER_RUNNER_WIN32_WINDOW": 1,
+      "Qt51514QWindowIcon": 1
+    },
+    "tray_windows": [
+      {
+        "hwnd": 65986,
+        "class": "Shell_TrayWnd",
+        "rect": [
+          0,
+          0,
+          1792,
+          48
+        ],
+        "size": [
+          1792,
+          48
+        ],
+        "inferred_edge": "top"
+      },
+      {
+        "hwnd": 66008,
+        "class": "Shell_SecondaryTrayWnd",
+        "rect": [
+          -1920,
+          0,
+          0,
+          48
+        ],
+        "size": [
+          1920,
+          48
+        ],
+        "inferred_edge": "top"
+      }
+    ]
+  },
+  "api_exports": {
+    "user32.dll": {
+      "SetWindowPos": true,
+      "SetWindowsHookExW": true,
+      "UnhookWindowsHookEx": true,
+      "RegisterWindowMessageW": true,
+      "GetForegroundWindow": true,
+      "SetForegroundWindow": true,
+      "AttachThreadInput": true,
+      "GetDpiForWindow": true,
+      "SetWindowLongW": true,
+      "GetWindowRect": true,
+      "FlashWindowEx": true,
+      "TrackPopupMenuEx": true,
+      "SetWinEventHook": true,
+      "SendMessageTimeoutW": true,
+      "GetWindowThreadProcessId": true,
+      "GetDpiForSystem": true,
+      "SetWindowCompositionAttribute": true,
+      "PrintWindow": true,
+      "IsIconic": true,
+      "ShowWindow": true,
+      "GetWindowDisplayAffinity": true
+    },
+    "dwmapi.dll": {
+      "DwmRegisterThumbnail": true,
+      "DwmUpdateThumbnailProperties": true,
+      "DwmUnregisterThumbnail": true,
+      "DwmQueryThumbnailSourceSize": true,
+      "DwmSetWindowAttribute": true,
+      "DwmGetWindowAttribute": true,
+      "DwmIsCompositionEnabled": true,
+      "DwmEnableBlurBehindWindow": true
+    },
+    "shell32.dll": {
+      "SHAppBarMessage": true,
+      "SHQueryUserNotificationState": true,
+      "ShellExecuteExW": true,
+      "SHGetFileInfoW": true,
+      "SHCreateItemFromParsingName": true
+    },
+    "shcore.dll": {
+      "GetDpiForMonitor": true,
+      "SetProcessDpiAwareness": true
+    },
+    "ole32.dll": {
+      "CoCreateInstance": true,
+      "CoInitializeEx": true
+    }
+  },
+  "processes": {
+    "explorer.exe": 1
+  },
+  "scope_note": "READ-ONLY probe. No window was moved, hidden, or modified."
+}

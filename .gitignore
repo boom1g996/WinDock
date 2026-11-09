@@ -1,0 +1,16 @@
+# Build output
+**/bin/
+**/obj/
+**/publish/
+*.user
+*.suo
+.vs/
+.vscode/
+
+# Local logs / probe scratch
+*.log
+logs/
+
+# Never commit credentials
+.env
+*token*.txt
