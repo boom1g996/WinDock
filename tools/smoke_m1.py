@@ -150,12 +150,32 @@ def windows_of(pid: int) -> list[dict]:
 
 FLOAT_TITLES = ("WinDock Guide", "WinDock Preview")
 
+# WPF 内部窗口与输入法框架窗口：尺寸会骗过「宽高 >50」的粗判，但不是 Dock 本体。
+# 实测（2026-11-10）：CiceroUIWndFrame 是 200×200、Hidden Window 是 1680×980，
+# 两者都被旧判定算成 Dock 窗口，导致 `dock_windows` 从 2 虚高到 3。
+INTERNAL_TITLES = ("Hidden Window", "SystemResourceNotifyWindow",
+                   "MediaContextNotificationWindow")
+INTERNAL_CLASSES = ("CiceroUIWndFrame", "IME", "MSCTFIME")
+
 
 def is_dock_window(w: dict) -> bool:
-    """Dock 主窗口：宽高都 >50；排除热区、首次引导与缩略图浮层（M2 第三批）。"""
-    return (w["size"][0] > 50 and w["size"][1] > 50
-            and "HotZone" not in w["class"]
-            and w.get("title") not in FLOAT_TITLES)
+    """Dock 主窗口。三种形态都必须认得出来：
+
+    - 唤出：673×157，可见；
+    - 自动隐藏：WPF 对 SizeToContent="WidthAndHeight" 的窗口一旦 Visibility 非 Visible，
+      HWND 会被收缩到 **2×2**（实测；改 Hidden 也无法避免，见 K-22）；
+    - 首次引导 / 预览浮层：标题固定，直接排除。
+
+    所以不能靠「宽高 >50」过滤——那会把 2×2 的 Dock 漏掉，又会把 200×200 的
+    CiceroUIWndFrame（输入法框架）算进来。改用「class 前缀 + 空标题 + 排除 ToolTip 形状」：
+    同类里只有 ToolTip popup 需要排掉，实测尺寸 170×47（高 40~55）。
+    """
+    if not w["class"].startswith("HwndWrapper[DockHost;"):
+        return False
+    if w.get("title") in FLOAT_TITLES or w.get("title") in INTERNAL_TITLES:
+        return False
+    width, height = w["size"]
+    return not (40 <= height <= 55 and width <= 400)  # ToolTip popup
 
 
 def existing_pid() -> int | None:

@@ -222,6 +222,9 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             ClosePreview();
         }
 
+        // K-22 记录：本窗口 SizeToContent="WidthAndHeight"，任何 Visibility 非 Visible
+        // （Collapsed 与 Hidden 都一样）都会让 WPF 把 HWND 收缩到 2×2，唤出时重新测量布局。
+        // 已实测 Hidden 无法避免，故维持 Collapsed；测试脚本按「窗口身份」而非尺寸识别。
         Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
     }
 

@@ -73,11 +73,13 @@ python tools/smoke_m1.py --restart --park-cursor --sample-seconds 30 `
   --settle-seconds 10 --cpu-trace --output docs/M2-smoke-batch6-idle.json
 
 # WD-035 长稳实证：24h 采样（60s/点，可随时中断续采）+ 汇总
+# 默认会先做交互预热再取基线（K-21：冷启动后首次走通预览/拖拽会抬升一截内存，
+# 不预热的话前 40 分钟的预热曲线会被误判成「漂移」）；加 --no-preheat 可跳过
 python tools/stability_m1.py --hours 24 --interval 60 --output docs/M2-stability.jsonl
 python tools/stability_m1.py --summary --output docs/M2-stability.jsonl
 ```
 
-> 长稳采样的两个注意点：① 写出方式是**追加**，中途断了重跑同一条命令即续采（不会覆盖已有样本，`runs` 字段按宿主 pid 分段）；② 采集器会拉起 `DockHost`，**终止采集器会连带回收宿主与看门狗**（同一进程树），这一轮不会写恢复事件，但宿主运行时长会重新计。
+> 长稳采样的三个注意点：① 写出方式是**追加**，中途断了重跑同一条命令即续采（不会覆盖已有样本，`runs` 字段按宿主 pid 分段）；② 采集器会拉起 `DockHost`，**终止采集器会连带回收宿主与看门狗**（同一进程树），这一轮不会写恢复事件，但宿主运行时长会重新计；③ 采样期间任何鼠标交互都会让私有字节跳 5~30MB，样本会打上 `suspected_interaction` 标记，汇总时与空闲漂移分开统计（`spike_samples` / `quiet_samples`）。
 
 产物：`artifacts/WinDock-win-x64/`（**自包含单文件**，推荐交付）与 `artifacts/WinDock-framework-dependent/`（需 .NET 10 桌面运行时），两者都含 `DockHost.exe`（主程序）、`WinDock.Settings.exe`（设置窗口）、`WinDock.Watchdog.exe`（守护进程），**三者必须同目录**；守护进程缺失时主程序会记 WARN 并降级为关闭。
 

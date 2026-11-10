@@ -95,6 +95,34 @@ def ensure_host(exe: Path) -> int | None:
     return None
 
 
+def preheat(pid: int, rounds: int = 3) -> dict:
+    """预热：先把交互路径各走几遍，让一次性成本落地，再取 24h 基线。
+
+    K-21 实测：宿主冷启动后，每出现一种新的交互路径就会抬升一截私有字节，
+    累计从 129.7MB 涨到 216.3MB（42 分钟），但**同类交互走顺后净增长为 0**
+    （8 轮 3s 驻留实验 -2.68MB）。若不预热就开跑，这段台阶会被误读成「漂移」，
+    24h 结论必然失真。
+    """
+    before = private_bytes(pid)
+    script = Path(__file__).resolve().parent / "leak_ab_probe.py"
+    cmd = [sys.executable, "-X", "utf8", str(script),
+           "--cycles", str(rounds), "--phases", "A,B,D"]
+    print(f"[stability] preheat: {' '.join(cmd)}", flush=True)
+    try:
+        subprocess.run(cmd, cwd=str(script.parent.parent), capture_output=True,
+                       text=True, encoding="utf-8", errors="replace", timeout=1200)
+    except (OSError, subprocess.SubprocessError) as ex:
+        print(f"[stability] preheat skipped: {ex}", flush=True)
+    time.sleep(20)  # 等预热后的 GC 落定，再量水位
+    after = private_bytes(pid)
+    info = {
+        "before_mb": round(before / 1048576, 2) if before else None,
+        "settled_mb": round(after / 1048576, 2) if after else None,
+    }
+    print(f"[stability] preheat done: {info}", flush=True)
+    return info
+
+
 def recovery_snapshot() -> tuple[float | None, dict | None]:
     path = smoke.RECOVERY
     if not path.is_file():
@@ -195,12 +223,16 @@ def summarize(path: Path, warmup_s: float = 300.0) -> int:
 
     # 冷启动（JIT / 图标提取 / 首次 DWM 注册）不属于长稳漂移，先剔除预热窗口再算趋势。
     steady = _steady_samples(samples, warmup_s) or samples
-    cpus = [s["cpu_percent"] for s in steady if s.get("cpu_percent") is not None]
-    mems = [s["working_set_mb"] for s in steady if s.get("working_set_mb") is not None]
-    privs = [s["private_mb"] for s in steady if s.get("private_mb") is not None]
-    handles = [s["handles"] for s in steady if s.get("handles") is not None]
-    gdis = [s["gdi"] for s in steady if s.get("gdi") is not None]
-    users = [s["user"] for s in steady if s.get("user") is not None]
+    # 交互样本单独剔除：一次光标划过 Dock 就是 +5~30MB 台阶（K-21），
+    # 混进来会让「24h 漂移」结论失真。数量仍如实上报。
+    spikes = sum(1 for s in samples if s.get("suspected_interaction"))
+    quiet = [s for s in steady if not s.get("suspected_interaction")] or steady
+    cpus = [s["cpu_percent"] for s in quiet if s.get("cpu_percent") is not None]
+    mems = [s["working_set_mb"] for s in quiet if s.get("working_set_mb") is not None]
+    privs = [s["private_mb"] for s in quiet if s.get("private_mb") is not None]
+    handles = [s["handles"] for s in quiet if s.get("handles") is not None]
+    gdis = [s["gdi"] for s in quiet if s.get("gdi") is not None]
+    users = [s["user"] for s in quiet if s.get("user") is not None]
     first, last = samples[0], samples[-1]
     span_h = _span_hours(first, last)
     crashes = sum(1 for s in samples if s.get("host_alive") is False)
@@ -243,6 +275,8 @@ def summarize(path: Path, warmup_s: float = 300.0) -> int:
         "file": str(path),
         "samples": len(samples),
         "steady_samples": len(steady),
+        "quiet_samples": len(quiet),
+        "spike_samples": spikes,
         "warmup_s": warmup_s,
         "interval_s": interval_s,
         "window_hours": round(span_h, 2),
@@ -286,15 +320,17 @@ def main() -> int:
     ap.add_argument("--output", default="docs/M2-stability.jsonl")
     ap.add_argument("--exe", default=str(smoke.EXE))
     ap.add_argument("--summary", action="store_true", help="只汇总已有数据文件")
-    ap.add_argument("--warmup", type=float, default=300.0,
-                    help="汇总时剔除的预热秒数（冷启动不计入长稳漂移，默认 300）")
+    ap.add_argument("--warmup", type=float, default=None,
+                    help="汇总时剔除的预热秒数（默认：预热过 120，未预热 300）")
+    ap.add_argument("--no-preheat", action="store_true",
+                    help="跳过交互预热，直接从冷启动开始采样（默认会预热）")
     ap.add_argument("--no-start", action="store_true", help="不自动拉起 DockHost，只采样已运行的实例")
     args = ap.parse_args()
 
     out = Path(args.output)
     out.parent.mkdir(parents=True, exist_ok=True)
     if args.summary:
-        return summarize(out, args.warmup)
+        return summarize(out, args.warmup if args.warmup is not None else 300.0)
 
     total_s = max(args.hours * 3600.0, args.minutes * 60.0)
     interval = max(5.0, args.interval)
@@ -306,11 +342,17 @@ def main() -> int:
         return 1
 
     started = datetime.now()
+    preheat_info = None
+    if not args.no_preheat:
+        preheat_info = preheat(pid)
+    warmup_s = args.warmup if args.warmup is not None else (120.0 if preheat_info else 300.0)
+
     last_recovery_mtime, last_recovery = recovery_snapshot()
     restarts = 0
     sample_no = 0
     print(f"[stability] start pid={pid} interval={interval}s total={total_s / 3600:.2f}h out={out}")
     out.open("a", encoding="utf-8").close()
+    prev_priv: float | None = None
 
     with out.open("a", encoding="utf-8") as fh:
         while True:
@@ -340,6 +382,7 @@ def main() -> int:
                 "new_errors": [],
                 "new_recovery": None,
                 "restarts": restarts,
+                "suspected_interaction": False,
             }
 
             if alive:
@@ -355,6 +398,17 @@ def main() -> int:
 
             sample["new_errors"] = error_lines(started)
 
+            # 长稳期间任何交互（光标划过 Dock、打开预览、拖拽排序）都会带来 5~30MB 的
+            # 私有字节台阶与 2~7% 的 CPU 尖峰（K-21 实测）。显式标记，汇总时与空闲漂移
+            # 分开统计——否则一次误触就能把 24h 结论带偏。
+            priv = sample["private_mb"]
+            jump = (abs(priv - prev_priv)
+                    if priv is not None and prev_priv is not None else 0.0)
+            sample["suspected_interaction"] = bool(
+                (sample["cpu_percent"] or 0.0) >= 2.0 or jump >= 5.0)
+            if priv is not None:
+                prev_priv = priv
+
             mtime, event = recovery_snapshot()
             if mtime is not None and mtime != last_recovery_mtime:
                 sample["new_recovery"] = event
@@ -364,9 +418,11 @@ def main() -> int:
             fh.flush()
 
             flag = "" if alive else "  <== HOST DOWN"
+            spike = "  <== 疑似交互" if sample["suspected_interaction"] else ""
             print(f"[stability] #{sample_no} {sample['local'][11:]} cpu={sample['cpu_percent']}% "
-                  f"ws={sample['working_set_mb']}MB h={sample['handles']} "
-                  f"dock={sample['dock_windows']} err={len(sample['new_errors'])}{flag}",
+                  f"ws={sample['working_set_mb']}MB priv={sample['private_mb']}MB "
+                  f"h={sample['handles']} gdi={sample['gdi']}/{sample['user']} "
+                  f"dock={sample['dock_windows']} err={len(sample['new_errors'])}{flag}{spike}",
                   flush=True)
 
             if not alive:
@@ -381,7 +437,7 @@ def main() -> int:
                 restarts += 1
                 pid = ensure_host(exe)
 
-    return summarize(out, args.warmup)
+    return summarize(out, warmup_s)
 
 
 if __name__ == "__main__":

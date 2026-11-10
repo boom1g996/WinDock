@@ -1,0 +1,878 @@
+{
+  "pid": 29208,
+  "baseline": {
+    "working_set_mb": 57.94,
+    "private_mb": 143.56,
+    "handles": 639,
+    "gdi": 24,
+    "user": 41,
+    "dock_windows": 2,
+    "hwnds": 11
+  },
+  "final": {
+    "working_set_mb": 100.87,
+    "private_mb": 207.08,
+    "handles": 672,
+    "gdi": 32,
+    "user": 44,
+    "dock_windows": 2,
+    "hwnds": 11
+  },
+  "phases": [
+    {
+      "phase": "A",
+      "cycles": [
+        {
+          "round": 1,
+          "detail": "dock-unreachable",
+          "before": {
+            "working_set_mb": 59.86,
+            "private_mb": 144.1,
+            "handles": 639,
+            "gdi": 24,
+            "user": 41,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 72.99,
+            "private_mb": 148.02,
+            "handles": 640,
+            "gdi": 22,
+            "user": 41,
+            "dock_windows": 3,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": 13.13,
+            "private_mb": 3.92,
+            "handles": 1,
+            "gdi": -2,
+            "user": 0,
+            "dock_windows": 1,
+            "hwnds": 0
+          }
+        },
+        {
+          "round": 2,
+          "detail": "dock-unreachable",
+          "before": {
+            "working_set_mb": 72.99,
+            "private_mb": 148.02,
+            "handles": 640,
+            "gdi": 22,
+            "user": 41,
+            "dock_windows": 3,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 33.31,
+            "private_mb": 146.21,
+            "handles": 640,
+            "gdi": 22,
+            "user": 41,
+            "dock_windows": 3,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": -39.68,
+            "private_mb": -1.81,
+            "handles": 0,
+            "gdi": 0,
+            "user": 0,
+            "dock_windows": 0,
+            "hwnds": 0
+          }
+        },
+        {
+          "round": 3,
+          "detail": "dock-unreachable",
+          "before": {
+            "working_set_mb": 33.31,
+            "private_mb": 146.21,
+            "handles": 640,
+            "gdi": 22,
+            "user": 41,
+            "dock_windows": 3,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 41.47,
+            "private_mb": 143.3,
+            "handles": 641,
+            "gdi": 22,
+            "user": 41,
+            "dock_windows": 3,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": 8.16,
+            "private_mb": -2.91,
+            "handles": 1,
+            "gdi": 0,
+            "user": 0,
+            "dock_windows": 0,
+            "hwnds": 0
+          }
+        },
+        {
+          "round": 4,
+          "detail": "dock-unreachable",
+          "before": {
+            "working_set_mb": 41.47,
+            "private_mb": 143.3,
+            "handles": 641,
+            "gdi": 22,
+            "user": 41,
+            "dock_windows": 3,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 54.57,
+            "private_mb": 156.51,
+            "handles": 641,
+            "gdi": 22,
+            "user": 41,
+            "dock_windows": 3,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": 13.1,
+            "private_mb": 13.21,
+            "handles": 0,
+            "gdi": 0,
+            "user": 0,
+            "dock_windows": 0,
+            "hwnds": 0
+          }
+        },
+        {
+          "round": 5,
+          "detail": "dock-unreachable",
+          "before": {
+            "working_set_mb": 54.57,
+            "private_mb": 156.51,
+            "handles": 641,
+            "gdi": 22,
+            "user": 41,
+            "dock_windows": 3,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 59.26,
+            "private_mb": 158.81,
+            "handles": 638,
+            "gdi": 22,
+            "user": 41,
+            "dock_windows": 3,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": 4.69,
+            "private_mb": 2.3,
+            "handles": -3,
+            "gdi": 0,
+            "user": 0,
+            "dock_windows": 0,
+            "hwnds": 0
+          }
+        },
+        {
+          "round": 6,
+          "detail": "dock-unreachable",
+          "before": {
+            "working_set_mb": 59.26,
+            "private_mb": 158.81,
+            "handles": 638,
+            "gdi": 22,
+            "user": 41,
+            "dock_windows": 3,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 60.08,
+            "private_mb": 157.61,
+            "handles": 638,
+            "gdi": 22,
+            "user": 41,
+            "dock_windows": 3,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": 0.82,
+            "private_mb": -1.2,
+            "handles": 0,
+            "gdi": 0,
+            "user": 0,
+            "dock_windows": 0,
+            "hwnds": 0
+          }
+        },
+        {
+          "round": 7,
+          "detail": "dock-unreachable",
+          "before": {
+            "working_set_mb": 60.08,
+            "private_mb": 157.61,
+            "handles": 638,
+            "gdi": 22,
+            "user": 41,
+            "dock_windows": 3,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 60.8,
+            "private_mb": 156.47,
+            "handles": 638,
+            "gdi": 22,
+            "user": 41,
+            "dock_windows": 3,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": 0.72,
+            "private_mb": -1.14,
+            "handles": 0,
+            "gdi": 0,
+            "user": 0,
+            "dock_windows": 0,
+            "hwnds": 0
+          }
+        },
+        {
+          "round": 8,
+          "detail": "dock-unreachable",
+          "before": {
+            "working_set_mb": 60.8,
+            "private_mb": 156.47,
+            "handles": 638,
+            "gdi": 22,
+            "user": 41,
+            "dock_windows": 3,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 62.66,
+            "private_mb": 158.05,
+            "handles": 638,
+            "gdi": 22,
+            "user": 41,
+            "dock_windows": 3,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": 1.86,
+            "private_mb": 1.58,
+            "handles": 0,
+            "gdi": 0,
+            "user": 0,
+            "dock_windows": 0,
+            "hwnds": 0
+          }
+        }
+      ],
+      "total_delta": {
+        "private_mb": 13.95,
+        "handles": -1,
+        "gdi": -2,
+        "user": 0,
+        "hwnds": 0
+      },
+      "start": {
+        "working_set_mb": 59.86,
+        "private_mb": 144.1,
+        "handles": 639,
+        "gdi": 24,
+        "user": 41,
+        "dock_windows": 2,
+        "hwnds": 11
+      },
+      "end": {
+        "working_set_mb": 62.66,
+        "private_mb": 158.05,
+        "handles": 638,
+        "gdi": 22,
+        "user": 41,
+        "dock_windows": 3,
+        "hwnds": 11
+      }
+    },
+    {
+      "phase": "B",
+      "cycles": [
+        {
+          "round": 1,
+          "detail": "panel=open entered=(869,1232)",
+          "before": {
+            "working_set_mb": 60.25,
+            "private_mb": 155.35,
+            "handles": 638,
+            "gdi": 22,
+            "user": 41,
+            "dock_windows": 3,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 111.92,
+            "private_mb": 178.77,
+            "handles": 640,
+            "gdi": 28,
+            "user": 41,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": 51.67,
+            "private_mb": 23.42,
+            "handles": 2,
+            "gdi": 6,
+            "user": 0,
+            "dock_windows": -1,
+            "hwnds": 0
+          }
+        },
+        {
+          "round": 2,
+          "detail": "panel=open entered=(869,1232)",
+          "before": {
+            "working_set_mb": 111.92,
+            "private_mb": 178.77,
+            "handles": 640,
+            "gdi": 28,
+            "user": 41,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 116.68,
+            "private_mb": 182.09,
+            "handles": 644,
+            "gdi": 28,
+            "user": 41,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": 4.76,
+            "private_mb": 3.32,
+            "handles": 4,
+            "gdi": 0,
+            "user": 0,
+            "dock_windows": 0,
+            "hwnds": 0
+          }
+        },
+        {
+          "round": 3,
+          "detail": "panel=open entered=(374,451)",
+          "before": {
+            "working_set_mb": 116.68,
+            "private_mb": 182.09,
+            "handles": 644,
+            "gdi": 28,
+            "user": 41,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 122.22,
+            "private_mb": 183.43,
+            "handles": 642,
+            "gdi": 26,
+            "user": 44,
+            "dock_windows": 4,
+            "hwnds": 13
+          },
+          "delta": {
+            "working_set_mb": 5.54,
+            "private_mb": 1.34,
+            "handles": -2,
+            "gdi": -2,
+            "user": 3,
+            "dock_windows": 2,
+            "hwnds": 2
+          }
+        },
+        {
+          "round": 4,
+          "detail": "panel=open entered=(869,1232)",
+          "before": {
+            "working_set_mb": 122.22,
+            "private_mb": 183.43,
+            "handles": 642,
+            "gdi": 26,
+            "user": 44,
+            "dock_windows": 4,
+            "hwnds": 13
+          },
+          "after": {
+            "working_set_mb": 135.34,
+            "private_mb": 194.38,
+            "handles": 640,
+            "gdi": 28,
+            "user": 42,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": 13.12,
+            "private_mb": 10.95,
+            "handles": -2,
+            "gdi": 2,
+            "user": -2,
+            "dock_windows": -2,
+            "hwnds": -2
+          }
+        },
+        {
+          "round": 5,
+          "detail": "panel=open entered=(869,1232)",
+          "before": {
+            "working_set_mb": 135.34,
+            "private_mb": 194.38,
+            "handles": 640,
+            "gdi": 28,
+            "user": 42,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 137.29,
+            "private_mb": 191.83,
+            "handles": 644,
+            "gdi": 34,
+            "user": 42,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": 1.95,
+            "private_mb": -2.55,
+            "handles": 4,
+            "gdi": 6,
+            "user": 0,
+            "dock_windows": 0,
+            "hwnds": 0
+          }
+        },
+        {
+          "round": 6,
+          "detail": "panel=open entered=(869,1232)",
+          "before": {
+            "working_set_mb": 137.29,
+            "private_mb": 191.83,
+            "handles": 644,
+            "gdi": 34,
+            "user": 42,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 145.88,
+            "private_mb": 199.47,
+            "handles": 647,
+            "gdi": 34,
+            "user": 42,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": 8.59,
+            "private_mb": 7.64,
+            "handles": 3,
+            "gdi": 0,
+            "user": 0,
+            "dock_windows": 0,
+            "hwnds": 0
+          }
+        },
+        {
+          "round": 7,
+          "detail": "panel=open entered=(869,1232)",
+          "before": {
+            "working_set_mb": 145.88,
+            "private_mb": 199.47,
+            "handles": 647,
+            "gdi": 34,
+            "user": 42,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 153.18,
+            "private_mb": 207.05,
+            "handles": 647,
+            "gdi": 34,
+            "user": 42,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": 7.3,
+            "private_mb": 7.58,
+            "handles": 0,
+            "gdi": 0,
+            "user": 0,
+            "dock_windows": 0,
+            "hwnds": 0
+          }
+        },
+        {
+          "round": 8,
+          "detail": "panel=open entered=(869,1232)",
+          "before": {
+            "working_set_mb": 153.18,
+            "private_mb": 207.05,
+            "handles": 647,
+            "gdi": 34,
+            "user": 42,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 155.48,
+            "private_mb": 206.62,
+            "handles": 645,
+            "gdi": 34,
+            "user": 42,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": 2.3,
+            "private_mb": -0.43,
+            "handles": -2,
+            "gdi": 0,
+            "user": 0,
+            "dock_windows": 0,
+            "hwnds": 0
+          }
+        }
+      ],
+      "total_delta": {
+        "private_mb": 51.27,
+        "handles": 7,
+        "gdi": 12,
+        "user": 1,
+        "hwnds": 0
+      },
+      "start": {
+        "working_set_mb": 60.25,
+        "private_mb": 155.35,
+        "handles": 638,
+        "gdi": 22,
+        "user": 41,
+        "dock_windows": 3,
+        "hwnds": 11
+      },
+      "end": {
+        "working_set_mb": 155.48,
+        "private_mb": 206.62,
+        "handles": 645,
+        "gdi": 34,
+        "user": 42,
+        "dock_windows": 2,
+        "hwnds": 11
+      }
+    },
+    {
+      "phase": "C",
+      "cycles": [
+        {
+          "round": 1,
+          "detail": "clicked=(869,1183)",
+          "before": {
+            "working_set_mb": 155.48,
+            "private_mb": 206.62,
+            "handles": 645,
+            "gdi": 34,
+            "user": 42,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 79.45,
+            "private_mb": 200.89,
+            "handles": 667,
+            "gdi": 32,
+            "user": 43,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": -76.03,
+            "private_mb": -5.73,
+            "handles": 22,
+            "gdi": -2,
+            "user": 1,
+            "dock_windows": 0,
+            "hwnds": 0
+          }
+        },
+        {
+          "round": 2,
+          "detail": "clicked=(869,1183)",
+          "before": {
+            "working_set_mb": 79.45,
+            "private_mb": 200.89,
+            "handles": 667,
+            "gdi": 32,
+            "user": 43,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 91.51,
+            "private_mb": 207.86,
+            "handles": 667,
+            "gdi": 32,
+            "user": 43,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": 12.06,
+            "private_mb": 6.97,
+            "handles": 0,
+            "gdi": 0,
+            "user": 0,
+            "dock_windows": 0,
+            "hwnds": 0
+          }
+        },
+        {
+          "round": 3,
+          "detail": "clicked=(869,1183)",
+          "before": {
+            "working_set_mb": 91.51,
+            "private_mb": 207.86,
+            "handles": 667,
+            "gdi": 32,
+            "user": 43,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 90.95,
+            "private_mb": 205.03,
+            "handles": 667,
+            "gdi": 32,
+            "user": 43,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": -0.56,
+            "private_mb": -2.83,
+            "handles": 0,
+            "gdi": 0,
+            "user": 0,
+            "dock_windows": 0,
+            "hwnds": 0
+          }
+        },
+        {
+          "round": 4,
+          "detail": "clicked=(869,1183)",
+          "before": {
+            "working_set_mb": 90.95,
+            "private_mb": 205.03,
+            "handles": 667,
+            "gdi": 32,
+            "user": 43,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 96.08,
+            "private_mb": 207.66,
+            "handles": 667,
+            "gdi": 32,
+            "user": 43,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": 5.13,
+            "private_mb": 2.63,
+            "handles": 0,
+            "gdi": 0,
+            "user": 0,
+            "dock_windows": 0,
+            "hwnds": 0
+          }
+        },
+        {
+          "round": 5,
+          "detail": "clicked=(869,1183)",
+          "before": {
+            "working_set_mb": 96.08,
+            "private_mb": 207.66,
+            "handles": 667,
+            "gdi": 32,
+            "user": 43,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 92.67,
+            "private_mb": 203.23,
+            "handles": 667,
+            "gdi": 32,
+            "user": 43,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": -3.41,
+            "private_mb": -4.43,
+            "handles": 0,
+            "gdi": 0,
+            "user": 0,
+            "dock_windows": 0,
+            "hwnds": 0
+          }
+        },
+        {
+          "round": 6,
+          "detail": "clicked=(869,1183)",
+          "before": {
+            "working_set_mb": 92.67,
+            "private_mb": 203.23,
+            "handles": 667,
+            "gdi": 32,
+            "user": 43,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 102.57,
+            "private_mb": 210.94,
+            "handles": 667,
+            "gdi": 32,
+            "user": 43,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": 9.9,
+            "private_mb": 7.71,
+            "handles": 0,
+            "gdi": 0,
+            "user": 0,
+            "dock_windows": 0,
+            "hwnds": 0
+          }
+        },
+        {
+          "round": 7,
+          "detail": "clicked=(869,1183)",
+          "before": {
+            "working_set_mb": 102.57,
+            "private_mb": 210.94,
+            "handles": 667,
+            "gdi": 32,
+            "user": 43,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 106.33,
+            "private_mb": 213.2,
+            "handles": 670,
+            "gdi": 32,
+            "user": 43,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": 3.76,
+            "private_mb": 2.26,
+            "handles": 3,
+            "gdi": 0,
+            "user": 0,
+            "dock_windows": 0,
+            "hwnds": 0
+          }
+        },
+        {
+          "round": 8,
+          "detail": "clicked=(869,1183)",
+          "before": {
+            "working_set_mb": 106.33,
+            "private_mb": 213.2,
+            "handles": 670,
+            "gdi": 32,
+            "user": 43,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "after": {
+            "working_set_mb": 100.87,
+            "private_mb": 207.08,
+            "handles": 672,
+            "gdi": 32,
+            "user": 44,
+            "dock_windows": 2,
+            "hwnds": 11
+          },
+          "delta": {
+            "working_set_mb": -5.46,
+            "private_mb": -6.12,
+            "handles": 2,
+            "gdi": 0,
+            "user": 1,
+            "dock_windows": 0,
+            "hwnds": 0
+          }
+        }
+      ],
+      "total_delta": {
+        "private_mb": 0.46,
+        "handles": 27,
+        "gdi": -2,
+        "user": 2,
+        "hwnds": 0
+      },
+      "start": {
+        "working_set_mb": 155.48,
+        "private_mb": 206.62,
+        "handles": 645,
+        "gdi": 34,
+        "user": 42,
+        "dock_windows": 2,
+        "hwnds": 11
+      },
+      "end": {
+        "working_set_mb": 100.87,
+        "private_mb": 207.08,
+        "handles": 672,
+        "gdi": 32,
+        "user": 44,
+        "dock_windows": 2,
+        "hwnds": 11
+      }
+    }
+  ],
+  "verdict": {
+    "kind": "phase-leak-A-B",
+    "note": "以下阶段每轮私有字节增量 ≥1MB：['A', 'B']；优先查该路径持有的窗口/位图",
+    "per_round": {
+      "A": {
+        "private_mb": 1.74,
+        "handles": -0.1,
+        "hwnds": 0.0
+      },
+      "B": {
+        "private_mb": 6.41,
+        "handles": 0.9,
+        "hwnds": 0.0
+      },
+      "C": {
+        "private_mb": 0.06,
+        "handles": 3.4,
+        "hwnds": 0.0
+      }
+    }
+  }
+}
