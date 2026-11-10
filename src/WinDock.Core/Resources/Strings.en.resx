@@ -85,4 +85,72 @@
   <data name="Settings_GuideScheduled" xml:space="preserve"><value>Done. The first-run guide will appear the next time WinDock starts.</value></data>
   <data name="Tray_RecoveryTitle" xml:space="preserve"><value>WinDock exited unexpectedly</value></data>
   <data name="Tray_RecoveryText" xml:space="preserve"><value>The watchdog restored the native taskbar. In Beautify mode the taskbar was never hidden. Reopen Settings from the tray menu if needed.</value></data>
+
+  <!-- M3/M4 settings window additions -->
+  <data name="Settings_GroupLayout" xml:space="preserve"><value>Layout</value></data>
+  <data name="Settings_GroupMaterial" xml:space="preserve"><value>Material &amp; appearance</value></data>
+  <data name="Settings_GroupAdvanced" xml:space="preserve"><value>Advanced</value></data>
+  <data name="Settings_Preset" xml:space="preserve"><value>Preset theme</value></data>
+  <data name="Settings_PresetCustom" xml:space="preserve"><value>Custom</value></data>
+  <data name="Settings_PresetMacosLight" xml:space="preserve"><value>macOS Light</value></data>
+  <data name="Settings_PresetMacosDark" xml:space="preserve"><value>macOS Dark</value></data>
+  <data name="Settings_PresetMono" xml:space="preserve"><value>Mono</value></data>
+  <data name="Settings_PresetCyber" xml:space="preserve"><value>Cyber Neon</value></data>
+  <data name="Settings_PresetGlass" xml:space="preserve"><value>Clear Glass</value></data>
+  <data name="Settings_Position" xml:space="preserve"><value>Position</value></data>
+  <data name="Settings_PosBottom" xml:space="preserve"><value>Bottom</value></data>
+  <data name="Settings_PosLeft" xml:space="preserve"><value>Left</value></data>
+  <data name="Settings_PosRight" xml:space="preserve"><value>Right</value></data>
+  <data name="Settings_IconShape" xml:space="preserve"><value>Icon shape</value></data>
+  <data name="Settings_ShapeRect" xml:space="preserve"><value>Rectangle</value></data>
+  <data name="Settings_ShapeRounded" xml:space="preserve"><value>Rounded</value></data>
+  <data name="Settings_ShapeCircle" xml:space="preserve"><value>Circle</value></data>
+  <data name="Settings_Padding" xml:space="preserve"><value>Inner padding</value></data>
+  <data name="Settings_OffsetFromEdge" xml:space="preserve"><value>Distance from edge</value></data>
+  <data name="Settings_BlurLevel" xml:space="preserve"><value>Blur strength</value></data>
+  <data name="Settings_BlurLow" xml:space="preserve"><value>Low</value></data>
+  <data name="Settings_BlurMedium" xml:space="preserve"><value>Medium</value></data>
+  <data name="Settings_BlurHigh" xml:space="preserve"><value>High</value></data>
+  <data name="Settings_ShadowLevel" xml:space="preserve"><value>Shadow</value></data>
+  <data name="Settings_ShadowNone" xml:space="preserve"><value>None</value></data>
+  <data name="Settings_ShadowWeak" xml:space="preserve"><value>Weak</value></data>
+  <data name="Settings_ShadowMedium" xml:space="preserve"><value>Medium</value></data>
+  <data name="Settings_ShadowStrong" xml:space="preserve"><value>Strong</value></data>
+  <data name="Settings_Reflection" xml:space="preserve"><value>Reflection</value></data>
+  <data name="Settings_ReflectionStrength" xml:space="preserve"><value>Reflection strength</value></data>
+  <data name="Settings_AccentColor" xml:space="preserve"><value>Accent color</value></data>
+  <data name="Settings_AccentSystem" xml:space="preserve"><value>System</value></data>
+  <data name="Settings_Language" xml:space="preserve"><value>Language</value></data>
+  <data name="Settings_LangZh" xml:space="preserve"><value>简体中文</value></data>
+  <data name="Settings_LangEn" xml:space="preserve"><value>English</value></data>
+  <data name="Settings_TaskbarMode" xml:space="preserve"><value>Taskbar coexistence</value></data>
+  <data name="Settings_ModeReplace" xml:space="preserve"><value>Replace (hide native taskbar)</value></data>
+  <data name="Settings_ModeCoexist" xml:space="preserve"><value>Coexist (keep tray area)</value></data>
+  <data name="Settings_ModeBeautify" xml:space="preserve"><value>Beautify (keep native taskbar)</value></data>
+  <data name="Settings_SystemArea" xml:space="preserve"><value>System area buttons</value></data>
+  <data name="Settings_ShowRecycleBin" xml:space="preserve"><value>Recycle Bin</value></data>
+  <data name="Settings_ShowTaskView" xml:space="preserve"><value>Task View</value></data>
+  <data name="Settings_ShowShowDesktop" xml:space="preserve"><value>Show desktop</value></data>
+  <data name="Settings_MinimizeFeedback" xml:space="preserve"><value>Drop icon into Dock on minimize (Dock-side feedback)</value></data>
+  <data name="Settings_UpdateCheck" xml:space="preserve"><value>Check for updates</value></data>
+  <data name="Settings_UpdateUpToDate" xml:space="preserve"><value>You are on the latest version (offline build, no update server).</value></data>
+  <data name="Settings_Export" xml:space="preserve"><value>Export config</value></data>
+  <data name="Settings_Import" xml:space="preserve"><value>Import config</value></data>
+  <data name="Settings_ExportTitle" xml:space="preserve"><value>Export config</value></data>
+  <data name="Settings_ImportTitle" xml:space="preserve"><value>Import config</value></data>
+  <data name="Settings_ExportDone" xml:space="preserve"><value>Config exported.</value></data>
+  <data name="Settings_ImportDone" xml:space="preserve"><value>Config imported and applied.</value></data>
+  <data name="Settings_ImportFailed" xml:space="preserve"><value>Import failed: not a valid WinDock config file.</value></data>
+  <data name="Settings_JsonFilter" xml:space="preserve"><value>WinDock config (*.json)|*.json|All files (*.*)|*.*</value></data>
+
+  <!-- M3 system area -->
+  <data name="Dock_RecycleBin" xml:space="preserve"><value>Recycle Bin</value></data>
+  <data name="Dock_TaskView" xml:space="preserve"><value>Task View</value></data>
+  <data name="Dock_ShowDesktop" xml:space="preserve"><value>Show desktop</value></data>
+  <data name="Menu_EmptyRecycleBin" xml:space="preserve"><value>Empty Recycle Bin</value></data>
+  <data name="Dialog_EmptyRecycleBinTitle" xml:space="preserve"><value>Empty Recycle Bin</value></data>
+  <data name="Dialog_EmptyRecycleBinText" xml:space="preserve"><value>Permanently delete all items in the Recycle Bin? This cannot be undone.</value></data>
+  <data name="Menu_OpenFolder" xml:space="preserve"><value>Open folder</value></data>
+  <data name="Error_FolderNotFound" xml:space="preserve"><value>Folder does not exist or is inaccessible.</value></data>
+  <data name="Menu_JumpList" xml:space="preserve"><value>Recent / frequent</value></data>
 </root>

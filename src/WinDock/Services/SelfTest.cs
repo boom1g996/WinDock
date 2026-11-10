@@ -5,6 +5,7 @@ using System.Windows;
 using WinDock.Core;
 using WinDock.Core.Interfaces;
 using WinDock.Core.Models;
+using WinDock.Core.Native;
 using WinDock.Core.Services;
 
 namespace WinDock.Services;
@@ -418,6 +419,123 @@ public static class SelfTest
                     && sep.WindowAvg < 45.0,
                     $"dropped={sep.Dropped}, bursts={sep.Bursts}, " +
                     $"active={sep.ActiveAvg}, window={sep.WindowAvg}");
+            }
+
+            // 25. M3/M4：预设主题 / 配置导入导出 / 多显示器解析 / 系统区与拖入默认值
+            {
+                Check("预设标识齐全且都在校验表内（custom + 5 套）",
+                    ThemePresets.Names.Length == 5
+                    && ThemePresets.Names.All(n => ConfigRanges.Presets.Contains(n))
+                    && ConfigRanges.Presets.Contains("custom"),
+                    $"names={string.Join(",", ThemePresets.Names)}");
+
+                var themed = new DockConfig();
+                themed.Behavior.AutoHide = false;
+                themed.General.Language = "en";
+                ThemePresets.Apply(themed, "cyber");
+                Check("应用预设写入外观/布局/动效并标记 preset",
+                    themed.Appearance.Preset == "cyber"
+                    && themed.Dock.IconShape == "circle"
+                    && themed.Appearance.AccentColor == "#FF00E5FF"
+                    && themed.Appearance.Reflection.Enabled
+                    && Math.Abs(themed.Animation.MagnifyScale - 2.0) < 0.000001,
+                    $"preset={themed.Appearance.Preset}, shape={themed.Dock.IconShape}, " +
+                    $"scale={themed.Animation.MagnifyScale}");
+                Check("应用预设不覆盖行为/通用偏好（FR-610）",
+                    !themed.Behavior.AutoHide && themed.General.Language == "en");
+
+                var bogusPreset = new DockConfig();
+                bogusPreset.Appearance.Preset = "no-such-preset";
+                ConfigService.Normalize(bogusPreset, new List<string>());
+                Check("未知预设名回退 custom", bogusPreset.Appearance.Preset == "custom",
+                    $"实际={bogusPreset.Appearance.Preset}");
+
+                // 导出 → 导入往返（WD-031：不丢字段；非法文件给可分类异常）
+                string exportDir = NewCase(root, "export");
+                string exportPath = Path.Combine(exportDir, "nested", "WinDock-config.json");
+                using (var service = new ConfigService(log, exportDir))
+                {
+                    DockConfig cur = service.Current;
+                    cur.Dock.IconSize = 72;
+                    cur.Appearance.Preset = "mono";
+                    cur.Behavior.ShowSystemArea = true;
+                    service.Save(cur);
+                    service.ExportTo(exportPath); // 目录不存在时自动创建
+                }
+
+                Check("导出生成 JSON 且含关键字段",
+                    File.Exists(exportPath)
+                    && File.ReadAllText(exportPath).Contains("\"showSystemArea\": true"),
+                    exportPath);
+
+                using (var target = new ConfigService(log, NewCase(root, "import")))
+                {
+                    DockConfig imported = target.ImportFrom(exportPath);
+                    Check("导入往返：图标尺寸/预设/系统区开关一致",
+                        imported.Dock.IconSize == 72
+                        && imported.Appearance.Preset == "mono"
+                        && imported.Behavior.ShowSystemArea,
+                        $"size={imported.Dock.IconSize}, preset={imported.Appearance.Preset}");
+                    Check("导入结果已作为新配置源保存",
+                        target.Current.Dock.IconSize == 72,
+                        $"实际={target.Current.Dock.IconSize}");
+                }
+
+                string badJson = Path.Combine(exportDir, "bad.json");
+                File.WriteAllText(badJson, "{ not json", new UTF8Encoding(false));
+                var importFailed = false;
+                using (var target = new ConfigService(log, NewCase(root, "import-bad")))
+                {
+                    try
+                    {
+                        target.ImportFrom(badJson);
+                    }
+                    catch (InvalidDataException)
+                    {
+                        importFailed = true;
+                    }
+                }
+
+                Check("导入非法 JSON 抛 InvalidDataException（供 UI 分类提示）", importFailed);
+
+                // 多显示器 / DPI（WD-021）
+                IReadOnlyList<DisplayMonitor> monitors = MonitorService.GetMonitors();
+                DisplayMonitor? primaryMonitor = monitors.FirstOrDefault(m => m.IsPrimary);
+                Check("枚举到显示器且主屏工作区/DPI 合法",
+                    monitors.Count >= 1 && primaryMonitor is not null
+                    && primaryMonitor.ScaleX > 0.5 && primaryMonitor.WorkAreaDip.Width > 100,
+                    $"count={monitors.Count}, primaryDpi={primaryMonitor?.DpiX}, " +
+                    $"work={primaryMonitor?.WorkAreaDip.Width}");
+
+                DipRect fallback = MonitorService.ResolveWorkArea("99", out bool fbPrimary);
+                DipRect primary = MonitorService.ResolveWorkArea("primary", out bool pPrimary);
+                Check("越界 monitor id 回退主屏工作区",
+                    fbPrimary && pPrimary
+                    && Math.Abs(fallback.Left - primary.Left) < 0.5
+                    && Math.Abs(fallback.Width - primary.Width) < 0.5,
+                    $"fallback={fallback.Left}/{fallback.Width}, primary={primary.Left}/{primary.Width}");
+
+                // 系统区只读查询（WD-026）：回收站为空/满都不得抛异常
+                var recycleOk = true;
+                try
+                {
+                    _ = NativeMethods.IsRecycleBinEmpty();
+                }
+                catch (Exception)
+                {
+                    recycleOk = false;
+                }
+
+                Check("查询回收站状态不抛异常", recycleOk);
+
+                var defaults = new DockConfig();
+                Check("系统区默认关闭、子项/拖入/最小化反馈默认开启",
+                    !defaults.Behavior.ShowSystemArea
+                    && defaults.Behavior.ShowRecycleBin
+                    && defaults.Behavior.ShowTaskView
+                    && defaults.Behavior.ShowShowDesktop
+                    && defaults.Behavior.DragDropAddEnabled
+                    && defaults.Behavior.MinimizeFeedbackEnabled);
             }
         }
         catch (Exception ex)

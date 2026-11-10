@@ -65,9 +65,14 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     private PreviewWindow? _previewWindow;
     private string? _previewGroupKey;
     private double _baseTop;
+    private double _baseLeft;
     private double _slideOffset;
     private bool _pointerOver;
     private bool _animationsPaused;
+
+    // WD-032：最小化事件钩子（映射到对应图标触发「落入 Dock」反馈）。
+    private IntPtr _minimizeHook;
+    private NativeMethods.WinEventProc? _minimizeProc;
 
     public MainWindow(IConfigService config, ILogService log, ITaskbarInterop taskbar,
         IWindowEnumerator enumerator, IIconService icons, IAnimationEngine animation,
@@ -87,11 +92,16 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         _animation.Frame += OnAnimationFrame;
         Root.MouseEnter += OnRootMouseEnter;
         Root.MouseLeave += OnRootMouseLeave;
+        // WD-030：允许从资源管理器拖入 .exe/.lnk/文件夹添加固定项（与内部重排互不冲突）。
+        Root.AllowDrop = true;
+        Root.DragOver += OnExternalDragOver;
+        Root.Drop += OnExternalDrop;
         // 拖拽手势：按下来自图标，移动/抬起统一由 Root 的捕获处理（WD-016）。
         Root.PreviewMouseMove += (_, args) => _drag?.OnPreviewMouseMove(args);
         Root.PreviewMouseLeftButtonUp += (_, args) => _drag?.OnPreviewMouseUp(args);
         KeyDown += OnWindowKeyDown;
         SourceInitialized += OnSourceInitialized;
+        Loaded += OnLoaded;
 
         ApplyConfig(_current);
     }
@@ -202,7 +212,12 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     public event EventHandler? PointerEntered;
     public event EventHandler? PointerLeft;
 
-    public double HiddenDistance => (ActualHeight > 0 ? ActualHeight : 126) + 8;
+    /// <summary>WD-022：左/右位置时 Dock 垂直排列，隐藏方向改为水平滑出。</summary>
+    private bool IsVertical => _current.Dock.Position is "left" or "right";
+
+    public double HiddenDistance => (IsVertical
+        ? (ActualWidth > 0 ? ActualWidth : 126)
+        : (ActualHeight > 0 ? ActualHeight : 126)) + 8;
 
     public bool IsPointerOverDock => _pointerOver;
 
@@ -214,11 +229,21 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         }
 
         _slideOffset = dip;
-        Top = _baseTop + dip;
-        // K-23：滑入/滑出动画靠 CompositionTarget.Rendering 推进，而改 Top 只移动
-        // 窗口、不产生内容重绘——光标停在热区不动（无后续鼠标消息）时渲染管线
-        // 静默，实测滑入冻结在 12px 处（Dock 只露 10px peek）。这里每帧强制失效
-        // 一次视觉，保证动画活跃期间合成器持续出帧；静止时本方法不会被调用。
+        if (IsVertical)
+        {
+            // 左侧 Dock 向屏幕外滑出 = Left 减小；右侧 Dock = Left 增大。
+            double sign = _current.Dock.Position == "left" ? -1 : 1;
+            Left = _baseLeft + (sign * dip);
+        }
+        else
+        {
+            Top = _baseTop + dip;
+        }
+
+        // K-23：滑入/滑出动画靠 CompositionTarget.Rendering 推进，而改 Top/Left 只移动
+        // 窗口、不产生内容重绘——光标停在热区不动（无后续鼠标消息）时渲染管线静默，
+        // 实测滑入冻结在 12px 处（Dock 只露 10px peek）。这里每帧强制失效一次视觉，
+        // 保证动画活跃期间合成器持续出帧；静止时本方法不会被调用。
         InvalidateVisual();
     }
 
@@ -230,13 +255,39 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             ClosePreview();
         }
 
-        // K-22 记录：本窗口 SizeToContent="WidthAndHeight"，任何 Visibility 非 Visible
+        // K-22 记录：本窗口 SizeToContent="WidthAndContent"，任何 Visibility 非 Visible
         // （Collapsed 与 Hidden 都一样）都会让 WPF 把 HWND 收缩到 2×2，唤出时重新测量布局。
         // 已实测 Hidden 无法避免，故维持 Collapsed；测试脚本按「窗口身份」而非尺寸识别。
         Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    /// <summary>
+    /// 按当前工作区重算 Left / _baseTop。折叠态（2×2）残留的错位尺寸会在可见后
+    /// 被复用，导致唤回后 Dock 出现在错误位置（用户在「自动收起后无法再唤起」中
+    /// 反馈的体感之一），因此 Show 路径必须重定位。
+    /// </summary>
+    public void Reposition()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(Position));
+            return;
+        }
+
+        if (Visibility == Visibility.Visible)
+        {
+            Position();
+        }
+        else
+        {
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(Position));
+        }
+    }
+
     public void SetInteractive(bool interactive) => IsHitTestVisible = interactive;
+
+    /// <summary>设置窗口打开期间抑制自动隐藏，保证 Dock 常驻可见（AC-09 实时预览）。</summary>
+    public void SetSettingsHeld(bool held) => _autoHide?.SetHeld("settings", held);
 
     private void OnRootMouseEnter(object sender, MouseEventArgs e)
     {
@@ -284,8 +335,9 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         _drag?.Cancel(); // 非拖拽态的热更新：确保没有残留手势
         _current = config;
 
-        byte alpha = (byte)Math.Round(Math.Clamp(config.Appearance.Opacity, 0, 1) * 255);
-        Capsule.Background = new SolidColorBrush(Color.FromArgb(alpha, 28, 30, 38));
+        // 背景由 DWM 整窗毛玻璃提供（ApplyGlass）：WPF 胶囊一律透明，避免盖住玻璃层。
+        Capsule.Background = Brushes.Transparent;
+
         Capsule.BorderBrush = ParseBorderBrush(config.Appearance.BorderColor);
         Capsule.BorderThickness = new Thickness(config.Appearance.BorderWidth);
         Capsule.CornerRadius = new CornerRadius(config.Dock.CornerRadius);
@@ -294,7 +346,20 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             config.Dock.Padding, config.Dock.Padding + 8);
 
         double grow = config.Dock.IconSize * (config.Animation.MagnifyScale - 1);
-        Root.Margin = new Thickness(grow / 2 + 10, grow + 12, grow / 2 + 10, 0);
+        bool vertical = IsVertical;
+        IconsPanel.Orientation = vertical ? Orientation.Vertical : Orientation.Horizontal;
+        IconsPanel.VerticalAlignment = vertical ? VerticalAlignment.Center : VerticalAlignment.Bottom;
+        Capsule.VerticalAlignment = vertical ? VerticalAlignment.Center : VerticalAlignment.Bottom;
+        Capsule.HorizontalAlignment = config.Dock.Position switch
+        {
+            "left" => HorizontalAlignment.Left,
+            "right" => HorizontalAlignment.Right,
+            _ => HorizontalAlignment.Center,
+        };
+        // 垂直 Dock 放大沿水平方向生长，需要左右留白；底部 Dock 向上生长，顶部留白。
+        Root.Margin = vertical
+            ? new Thickness(grow + 14, grow / 2 + 10, grow + 14, grow / 2 + 10)
+            : new Thickness(grow / 2 + 10, grow + 12, grow / 2 + 10, 0);
 
         bool reduced = config.Animation.RespectReducedMotion
                        && NativeMethods.IsReducedMotionEnabled();
@@ -313,11 +378,11 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             ClosePreview(); // 设置窗口关掉预览：立即注销句柄，不等下一次悬停
         }
 
-        // 尺寸 / 间距 / 形状变化必须重建可视化树，强制结构签名失效。
-        _lastStructure = "";
+        // 外观（尺寸 / 间距 / 形状）变化走 RebuildIcons：结构未变时只就地刷新已有图标，
+        // 不强制清空重建——否则配置热重载风暴会把整条 Dock 反复清空并卡死主线程。
         RebuildIcons();
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(Position));
-        TryApplyAcrylic(config);
+        ApplyGlass();
     }
 
     /// <summary>窗口枚举事件 / 配置变更后的重建入口（UI 线程安全）。</summary>
@@ -348,7 +413,9 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             $"{(item.IsSeparator ? "s" : item.IsAddButton ? "a" : "i")}:{item.Key}"));
         if (string.Equals(structure, _lastStructure, StringComparison.Ordinal))
         {
+            // 结构未变：仅原地刷新绑定与外观（尺寸 / 形状），不重建、不闪烁。
             UpdateIcons(items);
+            ApplyIconConfigs(_current);
             SyncIndicators();
             return false;
         }
@@ -357,6 +424,15 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         RenderIcons(items);
         SyncIndicators();
         return true;
+    }
+
+    /// <summary>结构未变时，对已有图标控件就地应用外观配置（尺寸 / 形状），避免整条 Dock 重建闪烁。</summary>
+    private void ApplyIconConfigs(DockConfig config)
+    {
+        foreach (DockIconControl control in _iconControls)
+        {
+            control.ApplyConfig(config);
+        }
     }
 
     /// <summary>把指示点目标状态同步给动画引擎；结构重建时新项直接就位，不集体淡入。</summary>
@@ -377,6 +453,7 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     private List<DockItem> BuildItems()
     {
         DockConfig config = _current;
+        int iconPx = RequestedIconPx();
         IReadOnlyList<AppWindowGroup> groups = _enumerator.Groups;
         var usedGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var items = new List<DockItem>();
@@ -406,7 +483,8 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
                 DisplayName = name,
                 Pinned = pinned,
                 Group = group,
-                Icon = _icons.GetIcon(pinned, config.Dock.IconSize),
+                Icon = _icons.GetIcon(pinned, iconPx)
+                       ?? (pinned.Type == "folder" ? CreateSystemGlyph("folder") : null),
             });
         }
 
@@ -425,9 +503,11 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
                 Key = group.Key,
                 DisplayName = group.DisplayName,
                 Group = group,
-                Icon = _icons.GetIcon(group.ExecutablePath, config.Dock.IconSize),
+                Icon = _icons.GetIcon(group.ExecutablePath, iconPx),
             });
         }
+
+        AppendSystemArea(items);
 
         if (items.Count == 0)
         {
@@ -440,6 +520,88 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         }
 
         return items;
+    }
+
+    /// <summary>WD-024：在运行区之后追加系统区（回收站 / 任务视图 / 显示桌面），可单独开关。</summary>
+    private void AppendSystemArea(List<DockItem> items)
+    {
+        BehaviorConfig b = _current.Behavior;
+        if (!b.ShowSystemArea)
+        {
+            return;
+        }
+
+        var sysItems = new List<DockItem>(3);
+        if (b.ShowRecycleBin)
+        {
+            sysItems.Add(SystemItem("recycleBin", "Dock_RecycleBin"));
+        }
+
+        if (b.ShowTaskView)
+        {
+            sysItems.Add(SystemItem("taskView", "Dock_TaskView"));
+        }
+
+        if (b.ShowShowDesktop)
+        {
+            sysItems.Add(SystemItem("showDesktop", "Dock_ShowDesktop"));
+        }
+
+        if (sysItems.Count == 0)
+        {
+            return;
+        }
+
+        if (items.Count > 0 && !items[^1].IsSeparator)
+        {
+            items.Add(new DockItem { IsSeparator = true, Key = "system-separator" });
+        }
+
+        items.AddRange(sysItems);
+    }
+
+    private DockItem SystemItem(string kind, string locKey) => new()
+    {
+        Key = $"sys:{kind}",
+        DisplayName = Loc.Instance.T(locKey),
+        IsSystemItem = true,
+        SystemKind = kind,
+        Icon = CreateSystemGlyph(kind),
+    };
+
+    /// <summary>
+    /// 系统区图标用矢量字形渲染（回收站 / 任务视图 / 显示桌面 / 文件夹兜底），
+    /// 避免依赖特定 exe 的图标提取，且在高 DPI 下始终清晰。
+    /// </summary>
+    private static ImageSource CreateSystemGlyph(string kind)
+    {
+        string data = kind switch
+        {
+            "recycleBin" => "M6,7 L18,7 L16.5,22 L7.5,22 Z M9,7 L9,3.5 L15,3.5 L15,7 Z",
+            "taskView" => "M3,5 L13,5 L13,14 L3,14 Z M9,10 L21,10 L21,19 L9,19 Z",
+            "showDesktop" => "M3,5 L21,5 L21,17 L3,17 Z M9,19 L15,19 L15,21 L9,21 Z",
+            "folder" => "M3,6 L10,6 L12,8 L21,8 L21,19 L3,19 Z",
+            _ => "M4,4 L20,4 L20,20 L4,20 Z",
+        };
+
+        var geometry = (PathGeometry)Geometry.Parse(data);
+        geometry.FillRule = FillRule.Nonzero; // 重叠子路径实心填充，避免出现镂空
+        var drawing = new GeometryDrawing(
+            new SolidColorBrush(Color.FromRgb(0xF2, 0xF4, 0xF8)), null, geometry);
+        var image = new DrawingImage(drawing);
+        image.Freeze();
+        return image;
+    }
+
+    /// <summary>
+    /// 图标提取目标尺寸：放大倍率下图标会被 RenderTransform 放大到
+    /// IconSize×MagnifyScale，按该值（取整 + 8px 余量、上限 256）提取，
+    /// 让放大后的图标仍有足够像素、不发虚（用户反馈图标模糊）。
+    /// </summary>
+    private int RequestedIconPx()
+    {
+        double need = _current.Dock.IconSize * _current.Animation.MagnifyScale + 8;
+        return (int)Math.Min(256, Math.Max(_current.Dock.IconSize, Math.Ceiling(need)));
     }
 
     /// <summary>结构未变：原地更新绑定与指示点，不销毁控件、不打断 hover。</summary>
@@ -470,6 +632,7 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         IconsPanel.Children.Clear();
         _iconControls.Clear();
         DockConfig config = _current;
+        bool vertical = IsVertical;
 
         foreach (DockItem item in items)
         {
@@ -477,11 +640,12 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             {
                 IconsPanel.Children.Add(new Border
                 {
-                    Width = 1,
-                    Height = config.Dock.IconSize * 0.6,
+                    Width = vertical ? config.Dock.IconSize * 0.6 : 1,
+                    Height = vertical ? 1 : config.Dock.IconSize * 0.6,
                     Background = new SolidColorBrush(Color.FromArgb(70, 255, 255, 255)),
-                    Margin = new Thickness(8, 0, 8, 0),
-                    VerticalAlignment = VerticalAlignment.Bottom,
+                    Margin = vertical ? new Thickness(0, 8, 0, 8) : new Thickness(8, 0, 8, 0),
+                    HorizontalAlignment = vertical ? HorizontalAlignment.Center : HorizontalAlignment.Stretch,
+                    VerticalAlignment = vertical ? VerticalAlignment.Center : VerticalAlignment.Bottom,
                 });
                 continue;
             }
@@ -506,8 +670,10 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
 
             var control = new DockIconControl(item);
             control.ApplyConfig(config);
-            control.Margin = new Thickness(config.Dock.IconSpacing / 2.0, 0,
-                config.Dock.IconSpacing / 2.0, 0);
+            control.Margin = vertical
+                ? new Thickness(0, config.Dock.IconSpacing / 2.0, 0, config.Dock.IconSpacing / 2.0)
+                : new Thickness(config.Dock.IconSpacing / 2.0, 0,
+                    config.Dock.IconSpacing / 2.0, 0);
             control.MouseEnter += (_, _) => OnIconEnter(control);
             control.PreviewMouseLeftButtonDown += (_, args) =>
                 _drag?.OnPreviewMouseDown(control, args);
@@ -771,6 +937,19 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     private void HandlePrimaryClick(DockIconControl control)
     {
         DockItem item = control.Item;
+        if (item.IsSystemItem)
+        {
+            HandleSystemItem(item);
+            return;
+        }
+
+        // WD-030 / FR-303：固定的文件夹点击直接打开资源管理器。
+        if (item.Pinned is { Type: "folder" } folder)
+        {
+            OpenFolder(folder.Path);
+            return;
+        }
+
         if (item.Group is { Windows.Count: > 0 } group)
         {
             bool foreground = group.Windows.Any(w => w.IsForeground);
@@ -826,11 +1005,172 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
 
     private void OpenMenu(DockIconControl control)
     {
-        control.ContextMenu = DockMenuBuilder.Build(
-            control.Item, _config, _log, _launcher, RefreshItems,
-            () => (Application.Current as App)?.ShowSettings(), HideDock);
+        control.ContextMenu = control.Item.IsSystemItem
+            ? BuildSystemMenu(control.Item)
+            : DockMenuBuilder.Build(
+                control.Item, _config, _log, _launcher, RefreshItems,
+                () => (Application.Current as App)?.ShowSettings(), HideDock);
         control.ContextMenu.PlacementTarget = control;
         control.ContextMenu.IsOpen = true;
+    }
+
+    /// <summary>WD-024：系统区按钮点击行为（回收站打开、任务视图、显示桌面）。</summary>
+    private void HandleSystemItem(DockItem item)
+    {
+        switch (item.SystemKind)
+        {
+            case "recycleBin":
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                        "explorer.exe", "shell:RecycleBinFolder") { UseShellExecute = true });
+                }
+                catch (Exception ex)
+                {
+                    _log.Error(Module, "打开回收站失败", ex);
+                }
+
+                break;
+            case "taskView":
+                NativeMethods.SendWinKey(NativeMethods.VK_TAB);
+                break;
+            case "showDesktop":
+                NativeMethods.SendWinKey(NativeMethods.VK_D);
+                break;
+        }
+    }
+
+    private ContextMenu BuildSystemMenu(DockItem item)
+    {
+        var menu = new ContextMenu();
+        var open = new MenuItem { Header = item.DisplayName };
+        open.Click += (_, _) => HandleSystemItem(item);
+        menu.Items.Add(open);
+
+        if (item.SystemKind == "recycleBin")
+        {
+            menu.Items.Add(new Separator());
+            var empty = new MenuItem { Header = Loc.Instance.T("Menu_EmptyRecycleBin") };
+            empty.Click += (_, _) => EmptyRecycleBinWithConfirm();
+            menu.Items.Add(empty);
+        }
+
+        return menu;
+    }
+
+    private void EmptyRecycleBinWithConfirm()
+    {
+        MessageBoxResult result = MessageBox.Show(
+            Loc.Instance.T("Dialog_EmptyRecycleBinText"),
+            Loc.Instance.T("Dialog_EmptyRecycleBinTitle"),
+            MessageBoxButton.YesNo, MessageBoxImage.Question);
+        if (result != MessageBoxResult.Yes)
+        {
+            return;
+        }
+
+        int hr = NativeMethods.EmptyRecycleBin();
+        if (hr != 0)
+        {
+            _log.Warn(Module, $"清空回收站失败 HRESULT=0x{hr:X8}");
+            return;
+        }
+
+        _lastStructure = "";
+        RefreshItems();
+    }
+
+    private void OpenFolder(string path)
+    {
+        try
+        {
+            if (!Directory.Exists(path))
+            {
+                _log.Warn(Module, Loc.Instance.T("Error_FolderNotFound"));
+                return;
+            }
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                "explorer.exe", $"\"{path}\"") { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            _log.Error(Module, "打开文件夹失败", ex);
+        }
+    }
+
+    /// <summary>WD-030：资源管理器拖入的视觉反馈（仅接受文件/文件夹拖放）。</summary>
+    private void OnExternalDragOver(object sender, DragEventArgs e)
+    {
+        if (_current.Behavior.DragDropAddEnabled
+            && e.Data.GetDataPresent(DataFormats.FileDrop))
+        {
+            e.Effects = DragDropEffects.Copy;
+            e.Handled = true;
+        }
+        else
+        {
+            e.Effects = DragDropEffects.None;
+        }
+    }
+
+    /// <summary>
+    /// WD-030 / FR-303：接受 .exe / .lnk / 文件夹拖入并添加为固定项；
+    /// 已固定同一路径时跳过，避免重复项。
+    /// </summary>
+    private void OnExternalDrop(object sender, DragEventArgs e)
+    {
+        if (!_current.Behavior.DragDropAddEnabled
+            || e.Data.GetData(DataFormats.FileDrop) is not string[] paths)
+        {
+            return;
+        }
+
+        bool added = false;
+        foreach (string path in paths)
+        {
+            bool isDir = Directory.Exists(path);
+            bool isFile = File.Exists(path);
+            if (!isDir && !isFile)
+            {
+                continue;
+            }
+
+            if (isFile)
+            {
+                string ext = Path.GetExtension(path);
+                if (!ext.Equals(".exe", StringComparison.OrdinalIgnoreCase)
+                    && !ext.Equals(".lnk", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue; // 只接受可执行/快捷方式/文件夹
+                }
+            }
+
+            bool exists = _current.Pinned.Any(p =>
+                string.Equals(p.Path, path, StringComparison.OrdinalIgnoreCase));
+            if (exists)
+            {
+                continue;
+            }
+
+            _current.Pinned.Add(new PinnedItem
+            {
+                Type = isDir ? "folder" : "app",
+                Path = path,
+                Name = Path.GetFileNameWithoutExtension(path),
+            });
+            added = true;
+            _log.Info(Module, $"拖入添加固定项：{path}");
+        }
+
+        if (!added)
+        {
+            return;
+        }
+
+        _config.Save(_current);
+        _lastStructure = "";
+        RefreshItems();
     }
 
     private static bool ConfirmCloseAll(AppWindowGroup group)
@@ -918,12 +1258,40 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
 
     private void Position()
     {
-        // SystemParameters.WorkArea 已按 DIP 给出并自动排除原生任务栏，
-        // 无论任务栏在顶部还是底部都成立（M0 实测本机为顶部）。
+        // 默认主屏用 SystemParameters.WorkArea（按 DIP 且自动排除原生任务栏）；
+        // WD-021：配置了非主屏（MonitorIds[0] = "1"/"2"…）时改用该显示器工作区。
         Rect work = SystemParameters.WorkArea;
-        Left = work.Left + ((work.Width - ActualWidth) / 2.0);
-        _baseTop = work.Bottom - ActualHeight - _current.Dock.OffsetFromEdge;
-        Top = _baseTop + _slideOffset;
+        string? monitorId = _current.Dock.MonitorIds?.FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(monitorId)
+            && !string.Equals(monitorId, "primary", StringComparison.OrdinalIgnoreCase))
+        {
+            WinDock.Core.Services.DipRect dip =
+                WinDock.Core.Services.MonitorService.ResolveWorkArea(monitorId, out bool isPrimary);
+            if (!isPrimary)
+            {
+                work = new Rect(dip.Left, dip.Top, dip.Width, dip.Height);
+            }
+        }
+
+        string position = _current.Dock.Position;
+        if (position is "left" or "right")
+        {
+            // WD-022：垂直居中、贴左/贴右；滑入滑出沿水平方向。
+            _baseLeft = position == "left"
+                ? work.Left + _current.Dock.OffsetFromEdge
+                : work.Right - ActualWidth - _current.Dock.OffsetFromEdge;
+            _baseTop = work.Top + ((work.Height - ActualHeight) / 2.0);
+            double sign = position == "left" ? -1 : 1;
+            Left = _baseLeft + (sign * _slideOffset);
+            Top = _baseTop;
+        }
+        else
+        {
+            _baseLeft = work.Left + ((work.Width - ActualWidth) / 2.0);
+            _baseTop = work.Bottom - ActualHeight - _current.Dock.OffsetFromEdge;
+            Left = _baseLeft;
+            Top = _baseTop + _slideOffset;
+        }
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
@@ -931,11 +1299,55 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         IntPtr handle = new WindowInteropHelper(this).Handle;
         HwndSource? source = HwndSource.FromHwnd(handle);
         source?.AddHook(WndProc);
-        TryApplyAcrylic(_current);
 
         // 快捷键需要真实 HWND；ApplyConfig 先设定开关，Attach 再实际注册。
         _hotkey?.ApplyConfig(_current);
         _hotkey?.Attach(handle);
+
+        // WD-032：监听最小化事件，在 Dock 侧播放「落入 Dock」反馈（不劫持系统动画）。
+        if (_current.Behavior.MinimizeFeedbackEnabled && _minimizeHook == IntPtr.Zero)
+        {
+            _minimizeProc = OnMinimizeEvent;
+            _minimizeHook = NativeMethods.SetWinEventHook(
+                NativeMethods.EVENT_SYSTEM_MINIMIZESTART,
+                NativeMethods.EVENT_SYSTEM_MINIMIZESTART,
+                IntPtr.Zero, _minimizeProc, 0, 0,
+                NativeMethods.WINEVENT_OUTOFCONTEXT | NativeMethods.WINEVENT_SKIPOWNPROCESS);
+        }
+
+        Closed += (_, _) =>
+        {
+            if (_minimizeHook != IntPtr.Zero)
+            {
+                NativeMethods.UnhookWinEvent(_minimizeHook);
+                _minimizeHook = IntPtr.Zero;
+                _minimizeProc = null;
+            }
+        };
+    }
+
+    /// <summary>最小化事件：找到该窗口所属图标，播放向下「落入 Dock」反馈（WD-032）。</summary>
+    private void OnMinimizeEvent(IntPtr hook, uint eventType, IntPtr hwnd, int idObject,
+        int idChild, uint idEventThread, uint dwmsEventTime)
+    {
+        if (hwnd == IntPtr.Zero || !_current.Behavior.MinimizeFeedbackEnabled || AnimationsPaused)
+        {
+            return;
+        }
+
+        // 钩子在非 UI 线程回调；派发到 UI 线程再读取控件集合。
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            for (int i = 0; i < _iconControls.Count; i++)
+            {
+                AppWindowGroup? group = _iconControls[i].Item.Group;
+                if (group is not null && group.Windows.Any(w => w.Handle == hwnd))
+                {
+                    _animation.Drop(i, _current.Dock.IconSize);
+                    break;
+                }
+            }
+        }));
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -959,6 +1371,11 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         {
             DumpIconLayout(wParam.ToInt64());
             handled = true;
+        }
+        else if (msg == NativeMethods.WM_DISPLAYCHANGE)
+        {
+            // WD-021：分辨率 / 缩放 / 显示器热插拔后重新定位，避免卡在已断开的屏幕。
+            Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(Reposition));
         }
 
         return IntPtr.Zero;
@@ -1011,55 +1428,63 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         }
     }
 
-    private void TryApplyAcrylic(DockConfig config)
+    /// <summary>
+    /// macOS 风格半透明毛玻璃背景。
+    /// 关键结论（GitHub 源码审计 + 实机验证）：WPF 的 AllowsTransparency=True（分层窗口）
+    /// 永远不会被 DWM 背景接管；且 Win11 上 ACCENT_ENABLE_BLURBEHIND 虽返回成功却不绘制
+    /// （Sundew.Xaml / ModernWPF 审计已确认）。可靠做法（slimenull.github.io 验证）：
+    ///   1. 窗口为普通窗口（AllowsTransparency=False）+ WindowStyle=None + 透明底色；
+    ///   2. CompositionTarget.BackgroundColor=Transparent，避免 WPF 自绘底色盖住玻璃；
+    ///   3. DwmExtendFrameIntoClientArea 把整窗扩展为玻璃边框 → Win11 整窗透出模糊桌面，
+    ///      且始终绘制（不依赖窗口是否前台），适合常驻 Dock；
+    ///   4. DWMWA_WINDOW_CORNER_PREFERENCE=ROUND 让 DWM 把窗口四角裁圆。
+    /// 必须在 Loaded（窗口已上屏）后调用，SourceInitialized 时 DWM 会拒绝。
+    /// </summary>
+    private void ApplyGlass()
     {
         IntPtr handle = new WindowInteropHelper(this).Handle;
-        if (handle == IntPtr.Zero || config.Appearance.BackgroundMode != "acrylic")
+        if (handle == IntPtr.Zero)
         {
             return;
+        }
+
+        HwndSource? source = HwndSource.FromHwnd(handle);
+        if (source is not null)
+        {
+            source.CompositionTarget.BackgroundColor = Colors.Transparent;
         }
 
         if (NativeMethods.DwmIsCompositionEnabled(out int composition) != 0 || composition == 0)
         {
-            _log.Info(Module, "无 DWM 合成，Acrylic 回退为纯半透明");
+            _log.Warn(Module, "DWM 合成未启用，毛玻璃不可用，回退纯透明");
             return;
         }
 
-        if (!NativeMethods.HasExport("user32.dll", "SetWindowCompositionAttribute"))
+        // 整窗扩展为玻璃边框（负值覆盖整个客户区）：Win11 下整窗透出模糊桌面。
+        var margins = new NativeMethods.MARGINS
         {
-            _log.Warn(Module, "系统未导出 SetWindowCompositionAttribute，Acrylic 回退为纯半透明");
-            return;
-        }
-
-        // 未文档化 API：先实测导出再调用。AllowsTransparency=True 的分层窗口上
-        // 该效果可能不生效，因此只记录「尝试」，不承诺模糊一定渲染（M0 降级结论）。
-        var policy = new NativeMethods.AccentPolicy
-        {
-            AccentState = NativeMethods.ACCENT_ENABLE_ACRYLICBLURBEHIND,
-            AccentFlags = 2,
-            GradientColor = 0,
+            cxLeftWidth = -1,
+            cxRightWidth = -1,
+            cyTopHeight = -1,
+            cyBottomHeight = -1,
         };
-        int size = Marshal.SizeOf<NativeMethods.AccentPolicy>();
-        IntPtr buffer = Marshal.AllocHGlobal(size);
-        try
+        int hr = NativeMethods.DwmExtendFrameIntoClientArea(handle, ref margins);
+        if (hr != 0)
         {
-            Marshal.StructureToPtr(policy, buffer, false);
-            var data = new NativeMethods.WindowCompositionAttributeData
-            {
-                Attribute = NativeMethods.WCA_ACCENT_POLICY,
-                Data = buffer,
-                SizeOfData = size,
-            };
-            bool ok = NativeMethods.SetWindowCompositionAttribute(handle, ref data);
-            _log.Info(Module, ok
-                ? "已尝试启用系统 Acrylic 背板（分层窗口下可能被系统忽略）"
-                : $"Acrylic 设置失败 Win32Error={Marshal.GetLastWin32Error()}，回退纯半透明");
+            _log.Warn(Module, $"DwmExtendFrameIntoClientArea 失败 HRESULT=0x{hr:X8}");
         }
-        finally
+        else
         {
-            Marshal.FreeHGlobal(buffer);
+            _log.Info(Module, "已启用整窗毛玻璃背景（DwmExtendFrameIntoClientArea）");
         }
+
+        // DWM 圆角：胶囊四角由 DWM 裁圆，配合玻璃得到 macOS 风格。
+        int corner = NativeMethods.DWMWCP_ROUND;
+        NativeMethods.DwmSetWindowAttribute(handle, NativeMethods.DWMWA_WINDOW_CORNER_PREFERENCE,
+            ref corner, sizeof(int));
     }
+
+    private void OnLoaded(object? sender, RoutedEventArgs e) => ApplyGlass();
 
     private static SolidColorBrush ParseBorderBrush(string value)
     {

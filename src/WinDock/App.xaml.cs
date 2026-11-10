@@ -30,6 +30,10 @@ public partial class App : Application
     private TrayService? _tray;
     private MainWindow? _dock;
 
+    /// <summary>设置窗口进程 PID 集合；用于在其全部退出后解除 Dock 的自动隐藏抑制。</summary>
+    private readonly HashSet<int> _settingsPids = new();
+    private readonly object _settingsLock = new();
+
     // M2 第二批：自动隐藏 / 全屏检测 / 热区 / 快捷键 / 唯一延时调度器
     private ITimerScheduler? _timers;
     private IFullScreenDetector? _fullScreen;
@@ -144,6 +148,8 @@ public partial class App : Application
             _taskbar.Restore();
             _log.Warn("App", "检测到未恢复的任务栏快照，已自动恢复（崩溃兜底）");
         }
+
+        ApplyTaskbarMode(); // WD-025：启动即按配置应用共存模式
 
         _enumerator = new WindowEnumerator(_log, SynchronizationContext.Current, _metrics);
         // WD-018：磁盘缓存按配置开关注入；关闭时退化为 M1 的纯内存缓存。
@@ -314,9 +320,49 @@ public partial class App : Application
         _autoHide?.ApplyConfig(args.Config);
         _hotkey?.ApplyConfig(args.Config);
         _watchdog?.ApplyConfig(args.Config); // 开关 / 失联阈值热更新
+        ApplyTaskbarMode();                   // WD-025：共存模式切换即时生效
         if (_log is not null)
         {
             StartupRegistry.Apply(args.Config.General.LaunchAtStartup, _log);
+        }
+    }
+
+    /// <summary>
+    /// WD-025 / 6.13：按配置应用与原生任务栏的共存方式。
+    /// - replace：隐藏原生任务栏，Dock 接管；失败时安全回退到共存。
+    /// - coexist：保留原生任务栏（托盘区方案）；Dock 作为附加条。
+    /// - beautify：完全不改动原生任务栏（默认、最安全）。
+    /// 免责：模式 A/B 依赖非官方方式操作任务栏，系统更新可能失效；任何失败都回退共存。
+    /// </summary>
+    private void ApplyTaskbarMode()
+    {
+        if (_taskbar is null || _config is null)
+        {
+            return;
+        }
+
+        string mode = _config.Current.General.TaskbarMode;
+        try
+        {
+            if (string.Equals(mode, "replace", StringComparison.OrdinalIgnoreCase))
+            {
+                bool ok = _taskbar.Hide();
+                _log?.Info("App", ok
+                    ? "任务栏模式=替换：已隐藏原生任务栏"
+                    : "任务栏模式=替换：隐藏失败，已保持共存（安全回退）");
+            }
+            else
+            {
+                _taskbar.Restore();
+                _log?.Info("App", string.Equals(mode, "coexist", StringComparison.OrdinalIgnoreCase)
+                    ? "任务栏模式=精简共存：保留原生任务栏（托盘区）"
+                    : "任务栏模式=仅美化：保留原生任务栏");
+            }
+        }
+        catch (Exception ex)
+        {
+            _log?.Error("App", "应用任务栏共存模式失败", ex);
+            _taskbar.Restore();
         }
     }
 
@@ -353,12 +399,69 @@ public partial class App : Application
                 return;
             }
 
-            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+            // 已有设置窗口在跑：直接聚焦，不重复启动；并确保护持 Dock 可见。
+            Process[] running = Process.GetProcessesByName("WinDock.Settings");
+            if (running.Length == 0)
+            {
+                Process? started = Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+                if (started is null)
+                {
+                    _log?.Warn("App", "启动设置程序返回空句柄");
+                    return;
+                }
+
+                AttachSettingsProcess(started);
+            }
+            else
+            {
+                foreach (Process p in running)
+                {
+                    AttachSettingsProcess(p);
+                }
+
+                // 把已有设置窗口提到前台，便于用户操作。
+                if (running[0].MainWindowHandle != IntPtr.Zero)
+                {
+                    NativeMethods.SetForegroundWindow(running[0].MainWindowHandle);
+                }
+            }
+
+            // 设置打开期间抑制自动隐藏，保证 Dock 常驻可见（AC-09 实时预览）。
+            _dock?.SetSettingsHeld(true);
         }
         catch (Exception ex)
         {
             _log?.Error("App", "打开设置窗口失败", ex);
         }
+    }
+
+    /// <summary>挂接设置进程的退出事件；所有设置进程都退出后，解除 Dock 的自动隐藏抑制。</summary>
+    private void AttachSettingsProcess(Process process)
+    {
+        lock (_settingsLock)
+        {
+            if (!_settingsPids.Add(process.Id))
+            {
+                return; // 已跟踪，避免重复挂接
+            }
+        }
+
+        process.EnableRaisingEvents = true;
+        process.Exited += (_, _) =>
+        {
+            bool anyLeft;
+            lock (_settingsLock)
+            {
+                _settingsPids.Remove(process.Id);
+                anyLeft = _settingsPids.Count > 0;
+            }
+
+            if (!anyLeft)
+            {
+                _dock?.SetSettingsHeld(false);
+                _log?.Info("App", "设置窗口已关闭：恢复 Dock 自动隐藏");
+            }
+        };
     }
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)

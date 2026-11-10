@@ -12,13 +12,17 @@ namespace WinDock.Core.Native;
 public static partial class NativeMethods
 {
     public const int GWL_EXSTYLE = -20;
+    public const int GWL_STYLE = -16;
     public const long WS_EX_TOOLWINDOW = 0x00000080L;
+    public const int WS_MAXIMIZE = 0x01000000;
 
     public const int DWMWA_CLOAKED = 14;
     public const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
     public const int DWMWA_SYSTEMBACKDROP_TYPE = 38;
+    public const int DWMSBT_NONE = 1;
     public const int DWMSBT_MAINWINDOW = 2;
     public const int DWMSBT_TRANSIENTWINDOW = 3;
+    public const int DWMWCP_ROUND = 2;
 
     public const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
     public const uint EVENT_SYSTEM_MINIMIZESTART = 0x0016;
@@ -75,6 +79,16 @@ public static partial class NativeMethods
     {
         public int X;
         public int Y;
+    }
+
+    /// <summary>DwmExtendFrameIntoClientArea 的边距：负值表示把整窗扩展为玻璃边框。</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MARGINS
+    {
+        public int cxLeftWidth;
+        public int cxRightWidth;
+        public int cyTopHeight;
+        public int cyBottomHeight;
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -239,6 +253,9 @@ public static partial class NativeMethods
 
     [DllImport("dwmapi.dll", SetLastError = true)]
     public static extern int DwmIsCompositionEnabled(out int pfEnabled);
+
+    [DllImport("dwmapi.dll", SetLastError = true)]
+    public static extern int DwmExtendFrameIntoClientArea(IntPtr hWnd, ref MARGINS pMarInset);
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     public static extern IntPtr SHGetFileInfo(string pszPath, uint dwFileAttributes,

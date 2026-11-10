@@ -137,10 +137,12 @@ public sealed class AnimationEngine : IAnimationEngine
         _bounceHeight = Math.Max(1, iconHeight) * 0.55; // FR-202：高度为图标 55%
         _bounceDurationMs = 300.0 * hops;               // 2 次 = 600ms ±50ms
         _bounceCount = hops;
+        _bounceDown = false;
         EnsureRunning();
     }
 
     private int _bounceCount = 2;
+    private bool _bounceDown; // WD-032：true 时跳动方向向下（最小化落入 Dock）
 
     public void Attention(int index, double iconHeight)
     {
@@ -156,6 +158,24 @@ public sealed class AnimationEngine : IAnimationEngine
         _bounceHeight = Math.Max(1, iconHeight) * 0.2;
         _bounceDurationMs = 200;
         _bounceCount = 1;
+        _bounceDown = false;
+        EnsureRunning();
+    }
+
+    public void Drop(int index, double iconHeight)
+    {
+        if (_reducedMotion || index < 0 || index >= _itemCount)
+        {
+            return;
+        }
+
+        // WD-032 / 6.9：最小化时图标向下「落入」Dock，300ms ease-in，一次。
+        _bounceIndex = index;
+        _bounceStartUtc = DateTime.UtcNow;
+        _bounceHeight = Math.Max(1, iconHeight) * 0.5;
+        _bounceDurationMs = 300;
+        _bounceCount = 1;
+        _bounceDown = true;
         EnsureRunning();
     }
 
@@ -408,8 +428,9 @@ public sealed class AnimationEngine : IAnimationEngine
         int hop = (int)(elapsed / period);
         double local = (elapsed - (hop * period)) / period;
         double damping = Math.Pow(0.35, hop); // FR-202：第 1 次 100%、第 2 次 35%
+        double direction = _bounceDown ? 1.0 : -1.0; // 负值向上、正值向下（WD-032）
         _bounceOffsets[_bounceIndex] =
-            -_bounceHeight * damping * Math.Sin(Math.PI * local); // 负值 = 向上
+            direction * _bounceHeight * damping * Math.Sin(Math.PI * local);
         return true;
     }
 

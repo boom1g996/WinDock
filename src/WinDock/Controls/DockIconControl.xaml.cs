@@ -19,6 +19,10 @@ public partial class DockIconControl : UserControl
     private bool _running;
     private bool _foreground;
 
+    // WD-022：垂直 Dock（左/右）时放大沿垂直方向生长、跳动朝屏幕内侧。
+    private bool _vertical;
+    private int _bounceSign = 1;
+
     public DockIconControl(DockItem item)
     {
         InitializeComponent();
@@ -77,15 +81,36 @@ public partial class DockIconControl : UserControl
             "circle" => new CornerRadius(size / 2.0),
             _ => new CornerRadius(Math.Max(2, size * 0.17)),
         };
+
+        // WD-022：放大锚点随 Dock 位置变化——底部向上生长、左侧向右、右侧向左，
+        // 避免整条 Dock 因放大而抖动（FR-201「图标底边对齐」的方位扩展）。
+        string position = config.Dock.Position;
+        _vertical = position is "left" or "right";
+        _bounceSign = position == "left" ? -1 : 1; // 左侧 Dock 跳动向右、右侧向左（朝屏幕内侧）
+        Root.RenderTransformOrigin = position switch
+        {
+            "left" => new Point(0, 0.5),
+            "right" => new Point(1, 0.5),
+            _ => new Point(0.5, 1),
+        };
     }
 
-    /// <summary>应用动画帧；缩放、水平位移与跳动都由 AnimationEngine 统一计算。</summary>
+    /// <summary>应用动画帧；缩放、沿排列方向位移与跳动都由 AnimationEngine 统一计算。</summary>
     public void SetFrame(double scale, double offset, double bounceY = 0)
     {
         Scale.ScaleX = scale;
         Scale.ScaleY = scale;
-        Translate.X = offset;
-        Translate.Y = bounceY;
+        if (_vertical)
+        {
+            // 垂直 Dock：排列方向是 Y，跳动朝屏幕内侧（X）。
+            Translate.Y = offset;
+            Translate.X = bounceY * _bounceSign;
+        }
+        else
+        {
+            Translate.X = offset;
+            Translate.Y = bounceY;
+        }
     }
 
     /// <summary>运行指示点目标：4px 圆点，前台应用更亮（需求 6.1 / 已批复默认值 3）。</summary>
@@ -104,8 +129,17 @@ public partial class DockIconControl : UserControl
     {
         Scale.ScaleX = scale;
         Scale.ScaleY = scale;
-        Translate.X = offsetX;
-        Translate.Y = -4;
+        if (_vertical)
+        {
+            Translate.Y = offsetX;
+            Translate.X = -_bounceSign * 4; // 抬起方向朝屏幕内侧
+        }
+        else
+        {
+            Translate.X = offsetX;
+            Translate.Y = -4;
+        }
+
         IconFrame.Effect = DragShadow;
     }
 

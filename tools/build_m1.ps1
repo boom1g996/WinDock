@@ -46,6 +46,25 @@ if ($Publish) {
     New-Item -ItemType Directory -Force -Path $artifacts | Out-Null
     $scOutput = Join-Path $artifacts "WinDock-$Runtime"
     $fxOutput = Join-Path $artifacts 'WinDock-framework-dependent'
+
+    # 必须清理旧发布产物：dotnet publish 单文件对已有 apphost 做增量跳过，即使源码已变
+    # 也不会重写自包含 exe（既有的「确定性时间戳不更新」坑），导致包内停留在旧二进制。
+    # 先删旧输出再发，保证包内是最新代码。
+    # 用 .NET API 删除而不用 Remove-Item：部分宿主会把 Remove-Item 拦成 safe-delete，
+    # 拦截失败时 fail-closed 直接抛错，导致发布脚本无法重跑（artifacts 是构建产物，可安全重建）。
+    foreach ($d in @($scOutput, $fxOutput)) {
+        if ([System.IO.Directory]::Exists($d)) {
+            try {
+                [System.IO.Directory]::Delete($d, $true)
+            }
+            catch [System.IO.IOException] {
+                Write-Warning "旧发布目录未被完全清理（有进程占用？）：$d"
+            }
+            catch [System.UnauthorizedAccessException] {
+                Write-Warning "旧发布目录无权限清理：$d"
+            }
+        }
+    }
     $projectFiles = @(
         (Join-Path $root 'src\WinDock\WinDock.csproj'),
         (Join-Path $root 'src\WinDock.Settings\WinDock.Settings.csproj'),

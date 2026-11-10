@@ -53,6 +53,28 @@ public static class DockMenuBuilder
         }
 
         menu.Items.Add(new Separator());
+
+        // WD-029 / FR-501 P2：读取目标应用的 Jump List「最近/常用」项；读不到则不显示分组。
+        if (!string.IsNullOrWhiteSpace(item.TargetPath) && File.Exists(item.TargetPath)
+            && !item.TargetPath.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase))
+        {
+            IReadOnlyList<WinDock.Core.Services.JumpListItem> jumps =
+                WinDock.Core.Services.JumpListReader.Read(item.TargetPath);
+            if (jumps.Count > 0)
+            {
+                var jumpRoot = new MenuItem { Header = Loc.Instance.T("Menu_JumpList") };
+                foreach (WinDock.Core.Services.JumpListItem jump in jumps)
+                {
+                    var jumpItem = new MenuItem { Header = Truncate(jump.Title, 42) };
+                    string target = jump.Path;
+                    jumpItem.Click += (_, _) => OpenPath(target);
+                    jumpRoot.Items.Add(jumpItem);
+                }
+
+                menu.Items.Add(jumpRoot);
+            }
+        }
+
         Add(menu, "Menu_NewWindow", () =>
         {
             if (item.Pinned is not null)
@@ -84,6 +106,11 @@ public static class DockMenuBuilder
                 config.Save(config.Current);
                 refresh();
             });
+        }
+
+        if (item.Pinned is { Type: "folder" } folder)
+        {
+            Add(menu, "Menu_OpenFolder", () => OpenPath(folder.Path));
         }
 
         Add(menu, "Menu_ShowInExplorer", () => ShowInExplorer(item.TargetPath));
@@ -124,7 +151,18 @@ public static class DockMenuBuilder
 
     private static void ShowInExplorer(string path)
     {
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        if (Directory.Exists(path))
+        {
+            OpenPath(path);
+            return;
+        }
+
+        if (!File.Exists(path))
         {
             return;
         }
@@ -133,6 +171,24 @@ public static class DockMenuBuilder
         {
             UseShellExecute = true,
         });
+    }
+
+    /// <summary>用系统默认方式打开文件 / 文件夹（Jump List 项、文件夹固定项复用）。</summary>
+    private static void OpenPath(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        try
+        {
+            Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        catch
+        {
+            // 路径失效：忽略。配置保留、不自动删除（需求第 9 章约束）。
+        }
     }
 
     private static string Truncate(string text, int max) =>

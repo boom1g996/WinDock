@@ -1,9 +1,9 @@
 <Window x:Class="WinDock.Settings.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Width="480" Height="640" MinWidth="440"
+        Width="500" Height="720" MinWidth="460"
         WindowStartupLocation="CenterScreen"
-        ResizeMode="CanMinimize">
+        ResizeMode="CanMinimize,CanResize">
     <ScrollViewer VerticalScrollBarVisibility="Auto">
         <StackPanel Margin="18">
             <TextBlock x:Name="TitleText" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,14" />
@@ -14,8 +14,23 @@
                 <StackPanel x:Name="PreviewIcons" Orientation="Horizontal" />
             </Border>
 
-            <GroupBox x:Name="AppearanceGroup" Padding="10" Margin="0,0,0,12">
+            <!-- 预设主题 -->
+            <StackPanel Margin="0,0,0,12">
+                <TextBlock x:Name="PresetLabel" Margin="0,0,0,4" />
+                <ComboBox x:Name="PresetCombo" />
+            </StackPanel>
+
+            <!-- 布局 -->
+            <GroupBox x:Name="LayoutGroup" Padding="10" Margin="0,0,0,12">
                 <StackPanel>
+                    <StackPanel Margin="0,6">
+                        <TextBlock x:Name="PositionLabel" Margin="0,0,0,4" />
+                        <ComboBox x:Name="PositionCombo" />
+                    </StackPanel>
+                    <StackPanel Margin="0,6">
+                        <TextBlock x:Name="IconShapeLabel" Margin="0,0,0,4" />
+                        <ComboBox x:Name="IconShapeCombo" />
+                    </StackPanel>
                     <StackPanel Margin="0,6">
                         <DockPanel>
                             <TextBlock x:Name="IconSizeLabel" />
@@ -34,12 +49,34 @@
                     </StackPanel>
                     <StackPanel Margin="0,6">
                         <DockPanel>
+                            <TextBlock x:Name="PaddingLabel" />
+                            <TextBlock x:Name="PaddingValue" DockPanel.Dock="Right" HorizontalAlignment="Right" />
+                        </DockPanel>
+                        <Slider x:Name="PaddingSlider" Minimum="4" Maximum="32"
+                                TickFrequency="1" IsSnapToTickEnabled="True" />
+                    </StackPanel>
+                    <StackPanel Margin="0,6">
+                        <DockPanel>
                             <TextBlock x:Name="CornerLabel" />
                             <TextBlock x:Name="CornerValue" DockPanel.Dock="Right" HorizontalAlignment="Right" />
                         </DockPanel>
                         <Slider x:Name="CornerSlider" Minimum="0" Maximum="50"
                                 TickFrequency="1" IsSnapToTickEnabled="True" />
                     </StackPanel>
+                    <StackPanel Margin="0,6">
+                        <DockPanel>
+                            <TextBlock x:Name="OffsetLabel" />
+                            <TextBlock x:Name="OffsetValue" DockPanel.Dock="Right" HorizontalAlignment="Right" />
+                        </DockPanel>
+                        <Slider x:Name="OffsetSlider" Minimum="0" Maximum="64"
+                                TickFrequency="1" IsSnapToTickEnabled="True" />
+                    </StackPanel>
+                </StackPanel>
+            </GroupBox>
+
+            <!-- 材质与外观 -->
+            <GroupBox x:Name="MaterialGroup" Padding="10" Margin="0,0,0,12">
+                <StackPanel>
                     <StackPanel Margin="0,6">
                         <DockPanel>
                             <TextBlock x:Name="OpacityLabel" />
@@ -49,6 +86,27 @@
                                 TickFrequency="1" IsSnapToTickEnabled="True" />
                     </StackPanel>
                     <StackPanel Margin="0,6">
+                        <TextBlock x:Name="BlurLabel" Margin="0,0,0,4" />
+                        <ComboBox x:Name="BlurCombo" />
+                    </StackPanel>
+                    <StackPanel Margin="0,6">
+                        <TextBlock x:Name="ShadowLabel" Margin="0,0,0,4" />
+                        <ComboBox x:Name="ShadowCombo" />
+                    </StackPanel>
+                    <StackPanel Margin="0,6">
+                        <TextBlock x:Name="AccentLabel" Margin="0,0,0,4" />
+                        <ComboBox x:Name="AccentCombo" />
+                    </StackPanel>
+                    <CheckBox x:Name="ReflectionCheckBox" Margin="0,8,0,4" />
+                    <StackPanel Margin="0,2">
+                        <DockPanel>
+                            <TextBlock x:Name="ReflectionStrengthLabel" />
+                            <TextBlock x:Name="ReflectionStrengthValue" DockPanel.Dock="Right" HorizontalAlignment="Right" />
+                        </DockPanel>
+                        <Slider x:Name="ReflectionStrengthSlider" Minimum="0" Maximum="100"
+                                TickFrequency="1" IsSnapToTickEnabled="True" />
+                    </StackPanel>
+                    <StackPanel Margin="0,8,0,0">
                         <DockPanel>
                             <TextBlock x:Name="MagnifyLabel" />
                             <TextBlock x:Name="MagnifyValue" DockPanel.Dock="Right" HorizontalAlignment="Right" />
@@ -59,16 +117,41 @@
                 </StackPanel>
             </GroupBox>
 
-            <GroupBox x:Name="BehaviorGroup" Padding="10">
+            <!-- 行为 -->
+            <GroupBox x:Name="BehaviorGroup" Padding="10" Margin="0,0,0,12">
                 <StackPanel>
-                    <CheckBox x:Name="StartupCheckBox" Margin="0,4" />
+                    <StackPanel Margin="0,4">
+                        <TextBlock x:Name="ModeLabel" Margin="0,0,0,4" />
+                        <ComboBox x:Name="ModeCombo" />
+                    </StackPanel>
+                    <StackPanel Margin="0,8">
+                        <TextBlock x:Name="LanguageLabel" Margin="0,0,0,4" />
+                        <ComboBox x:Name="LanguageCombo" />
+                    </StackPanel>
+                    <CheckBox x:Name="StartupCheckBox" Margin="0,8,0,4" />
                     <CheckBox x:Name="PreviewCheckBox" Margin="0,4" />
+                    <CheckBox x:Name="MinimizeFeedbackCheckBox" Margin="0,4" />
+                    <CheckBox x:Name="SystemAreaCheckBox" Margin="0,8,0,4" />
+                    <CheckBox x:Name="RecycleBinCheckBox" Margin="16,2,0,2" />
+                    <CheckBox x:Name="TaskViewCheckBox" Margin="16,2,0,2" />
+                    <CheckBox x:Name="ShowDesktopCheckBox" Margin="16,2,0,2" />
                     <Button x:Name="GuideButton" HorizontalAlignment="Left"
                             Margin="0,10,0,4" Padding="10,4" />
                 </StackPanel>
             </GroupBox>
 
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,4">
+            <!-- 高级 -->
+            <GroupBox x:Name="AdvancedGroup" Padding="10" Margin="0,0,0,12">
+                <StackPanel>
+                    <WrapPanel>
+                        <Button x:Name="ExportButton" Margin="0,0,8,8" Padding="10,5" />
+                        <Button x:Name="ImportButton" Margin="0,0,8,8" Padding="10,5" />
+                        <Button x:Name="UpdateButton" Margin="0,0,8,8" Padding="10,5" />
+                    </WrapPanel>
+                </StackPanel>
+            </GroupBox>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,4,0,4">
                 <Button x:Name="ResetButton" MinWidth="110" Margin="0,0,8,0" Padding="10,5" />
                 <Button x:Name="LogButton" MinWidth="110" Margin="0,0,8,0" Padding="10,5" />
                 <Button x:Name="CloseButton" MinWidth="80" Padding="10,5" />

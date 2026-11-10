@@ -61,6 +61,10 @@ public interface IDockWindowHost
     void SetSlideOffset(double dip);
     void SetVisible(bool visible);
     void SetInteractive(bool interactive);
+
+    /// <summary>按当前屏幕与工作区重新计算 Left / _baseTop（唤回 / 多屏变化时调用，
+    /// 避免折叠态 2×2 残留的错位坐标被复用）。</summary>
+    void Reposition();
     event EventHandler? PointerEntered;
     event EventHandler? PointerLeft;
 }

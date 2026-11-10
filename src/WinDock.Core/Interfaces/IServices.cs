@@ -20,6 +20,15 @@ public interface IConfigService : IDisposable
     event EventHandler<ConfigChangedEventArgs>? Changed;
     void Save(DockConfig config);
     void Reload();
+
+    /// <summary>导出当前配置到指定路径（JSON，含 schemaVersion，WD-031 / 6.14）。</summary>
+    void ExportTo(string path);
+
+    /// <summary>
+    /// 从指定路径导入配置：解析 + 夹紧 + 原子写，成功后通过 Changed 广播热更新。
+    /// 解析失败抛 <see cref="System.IO.InvalidDataException"/>，调用方负责提示。
+    /// </summary>
+    DockConfig ImportFrom(string path);
 }
 
 /// <summary>原生任务栏隐藏 / 恢复；默认模式 C 下不得调用 Hide（设计决策 D1）。</summary>
@@ -81,6 +90,9 @@ public interface IAnimationEngine : IDisposable
 
     /// <summary>注意提示跳动（FR-203）：原地 200ms 小幅跳动一次。</summary>
     void Attention(int index, double iconHeight);
+
+    /// <summary>Dock 侧最小化反馈（WD-032 / 6.9）：图标 300ms 向下「落入」Dock。</summary>
+    void Drop(int index, double iconHeight);
 
     void StopBounce();
 

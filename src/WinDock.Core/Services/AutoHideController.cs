@@ -95,6 +95,7 @@ public sealed class AutoHideController : IAutoHideController
         if (!IsHidden)
         {
             _host.SetVisible(true);
+            _host.Reposition();
             _host.SetInteractive(true);
             SyncHotZone();
             return;
@@ -102,6 +103,7 @@ public sealed class AutoHideController : IAutoHideController
 
         IsHidden = false;
         _host.SetVisible(true);
+        _host.Reposition(); // 折叠态 2×2 残留坐标必须重算，否则唤回后 Dock 错位看不到
         _host.SetInteractive(false); // 滑入途中不接收点击，避免误触
         _animation.Slide(0);
         _timers.Schedule(SlideKey, SlideSettleMs, () => CompleteSlide(hidden: false));
@@ -172,8 +174,15 @@ public sealed class AutoHideController : IAutoHideController
             {
                 Show(); // 浮层打开时保证 Dock 常驻可见
             }
+            // 仍处全屏态：保持隐藏（全屏期间 OnFullScreenChanged 不会因 Held 改变可见性）
         }
-        else if (_enabled && !IsHidden && !_inFullScreen && !_host.IsPointerOverDock)
+        else if (_inFullScreen)
+        {
+            // 最后一个浮层关闭且仍处于全屏 / 演示态：全屏优先级高于自动隐藏，立即隐藏。
+            Hide(force: true);
+            _host.SetVisible(false);
+        }
+        else if (_enabled && !IsHidden && !_host.IsPointerOverDock)
         {
             // 最后一个浮层关闭且鼠标仍在别处：重新按 HideDelayMs 计时，不立即滑出。
             _timers.Schedule(DelayKey, Math.Max(0, _hideDelayMs), () => Hide());
@@ -268,6 +277,19 @@ public sealed class AutoHideController : IAutoHideController
 
         if (full)
         {
+            // FR-603「立即隐藏」：独占全屏 / 演示态下 Dock 应让位。但 WinDock 自己的
+            // UI 表面（设置 / 引导 / 预览）打开时，用户正在操作 Dock 而非看全屏内容，
+            // 不隐藏——否则「打开设置时 Dock 图标消失」之类体感会复现（此前只抑制了
+            // 自动隐藏、漏了全屏隐藏）。等最后一个浮层关闭后，SetHeld 释放路径会重新
+            // 判定全屏并隐藏。
+            if (Held)
+            {
+                _log.Info(Module, "全屏态但浮层打开：暂不隐藏，等浮层关闭");
+                _timers.Cancel(RestoreKey);
+                _hotZone.Disable();
+                return;
+            }
+
             _timers.Cancel(RestoreKey);
             _hotZone.Disable();
             Hide(force: true);

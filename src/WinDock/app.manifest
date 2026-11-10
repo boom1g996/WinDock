@@ -17,7 +17,9 @@
   </compatibility>
   <application xmlns="urn:schemas-microsoft-com:asm.v3">
     <windowsSettings>
-      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+      <!-- WD-021 / AC-12：只声明 PerMonitorV2。旧版 dpiAware=true/pm 与之并存时
+           Windows 会解析成 per-monitor v1（实测 GetAwarenessFromDpiAwarenessContext=2），
+           移除 legacy 声明后才是真正的 PerMonitorV2。 -->
       <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
       <longPathAware xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">true</longPathAware>
     </windowsSettings>

@@ -35,6 +35,13 @@ public sealed class DockItem
     public ImageSource? Icon { get; set; }
     public bool IsSeparator { get; init; }
     public bool IsAddButton { get; init; }
+
+    /// <summary>系统区按钮（回收站 / 任务视图 / 显示桌面，WD-024）。</summary>
+    public bool IsSystemItem { get; init; }
+
+    /// <summary>系统项类型：recycleBin | taskView | showDesktop。</summary>
+    public string SystemKind { get; init; } = "";
+
     public bool IsRunning => (Group?.Windows.Count ?? 0) > 0;
     public bool IsForeground => Group?.Windows.Any(w => w.IsForeground) == true;
 

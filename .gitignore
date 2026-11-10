@@ -3,6 +3,7 @@
 **/obj/
 **/publish/
 artifacts/
+dist/
 selftest-result.txt
 __pycache__/
 *.py[cod]

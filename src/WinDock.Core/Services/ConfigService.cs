@@ -30,6 +30,9 @@ public sealed class ConfigService : IConfigService
     private int _reloadGuard;
     private DockConfig _current;
     private string _lastSerialized = "";
+    // 已广播内容：同一份配置内容绝不重复触发 Changed，切断「写盘 → 监视器 → 重载 → 写盘」
+    // 的自激振荡（2026-11-10 实机曾出现持续 20 分钟的热重载风暴，主线程被 ApplyConfig 占满）。
+    private string _lastBroadcast = "";
 
     /// <param name="log">日志服务。</param>
     /// <param name="configDirectory">可选自定义目录；离线自检用临时目录，避免污染真实配置。</param>
@@ -44,6 +47,7 @@ public sealed class ConfigService : IConfigService
 
         _current = LoadFromDisk(out List<string> warnings);
         _lastSerialized = Serialize(_current);
+        _lastBroadcast = _lastSerialized;
         foreach (string warning in warnings)
         {
             _log.Warn(Module, warning);
@@ -119,6 +123,7 @@ public sealed class ConfigService : IConfigService
         }
 
         var a = config.Appearance;
+        a.Preset = Choice(a.Preset, ConfigRanges.Presets, "custom", "appearance.preset", warnings);
         a.BackgroundMode = Choice(a.BackgroundMode, ConfigRanges.BackgroundModes, "acrylic", "appearance.backgroundMode", warnings);
         a.BlurLevel = Choice(a.BlurLevel, ConfigRanges.BlurLevels, "medium", "appearance.blurLevel", warnings);
         a.ShadowLevel = Choice(a.ShadowLevel, ConfigRanges.ShadowLevels, "medium", "appearance.shadowLevel", warnings);
@@ -128,6 +133,8 @@ public sealed class ConfigService : IConfigService
         {
             a.BorderColor = "#1FFFFFFF";
         }
+
+        a.AccentColor ??= "";
 
         a.Reflection.Strength = Clamp(a.Reflection.Strength, ConfigRanges.ReflectionStrength, "appearance.reflection.strength", warnings);
         a.Reflection.Height = Clamp(a.Reflection.Height, ConfigRanges.ReflectionHeight, "appearance.reflection.height", warnings);
@@ -183,6 +190,13 @@ public sealed class ConfigService : IConfigService
             _current = config;
         }
 
+        // 自激振荡防护：同一内容不重复广播。
+        if (json == _lastBroadcast)
+        {
+            return;
+        }
+
+        _lastBroadcast = json;
         foreach (string warning in warnings)
         {
             _log.Warn(Module, warning);
@@ -210,12 +224,67 @@ public sealed class ConfigService : IConfigService
             _current = config;
         }
 
+        if (json == _lastBroadcast)
+        {
+            return;
+        }
+
+        _lastBroadcast = json;
         foreach (string warning in warnings)
         {
             _log.Warn(Module, warning);
         }
 
         Changed?.Invoke(this, new ConfigChangedEventArgs(config, warnings));
+    }
+
+    /// <inheritdoc />
+    public void ExportTo(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        string json;
+        lock (_sync)
+        {
+            json = Serialize(_current);
+        }
+
+        string? dir = Path.GetDirectoryName(path);
+        if (!string.IsNullOrEmpty(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
+        File.WriteAllText(path, json, new UTF8Encoding(false));
+        _log.Info(Module, $"已导出配置到 {path}");
+    }
+
+    /// <inheritdoc />
+    public DockConfig ImportFrom(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        string json = File.ReadAllText(path, Encoding.UTF8);
+        DockConfig config;
+        try
+        {
+            config = JsonSerializer.Deserialize<DockConfig>(json, JsonOptions)
+                     ?? throw new InvalidDataException("配置文件为空");
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException("配置文件不是合法 JSON", ex);
+        }
+
+        var warnings = new List<string>();
+        Normalize(config, warnings);
+        foreach (string warning in warnings)
+        {
+            _log.Warn(Module, warning);
+        }
+
+        // 复用 Save：原子写 + 去重广播，导入后主进程 200ms 内热更新。
+        Save(config);
+        _log.Info(Module, $"已从 {path} 导入配置");
+        return config;
     }
 
     public void Dispose()

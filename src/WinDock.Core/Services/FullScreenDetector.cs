@@ -156,6 +156,15 @@ public sealed class FullScreenDetector : IFullScreenDetector
             return false;
         }
 
+        // 普通「最大化」窗口（带 WS_MAXIMIZE）不算全屏：它只是占满工作区，
+        // 用户仍可正常操作，若据此隐藏 Dock 并禁用热区会出现「操作后无法用鼠标
+        // 唤回」的体感（FR-603 只针对独占全屏 / 演示态）。真正的独占全屏由
+        // QUNS 判据兜底，这里只放行无边框铺满屏的窗口。
+        if ((GetWindowLong(foreground, GWL_STYLE) & WS_MAXIMIZE) != 0)
+        {
+            return false;
+        }
+
         IntPtr monitor = MonitorFromWindow(foreground, MONITOR_DEFAULTTONEAREST);
         var info = new MONITORINFO { Size = Marshal.SizeOf<MONITORINFO>() };
         if (monitor == IntPtr.Zero || !GetMonitorInfo(monitor, ref info))

@@ -30,6 +30,12 @@ public sealed class GeneralConfig
 
     /// <summary>首次启动引导是否已完成（WD-017）；旧配置缺字段时为 false，会弹一次引导。</summary>
     public bool FirstRunCompleted { get; set; }
+
+    /// <summary>
+    /// 检查更新开关（WD-028 / 6.15）。产品决策：免费、无账号、无更新服务器，
+    /// 因此「检查」在无网络端点时按「已是最新」处理，不联网、不上报。
+    /// </summary>
+    public bool CheckUpdate { get; set; }
 }
 
 /// <summary>Dock 布局参数（FR-101 / FR-102）。</summary>
@@ -48,6 +54,9 @@ public sealed class DockLayoutConfig
 /// <summary>外观参数（6.10）。</summary>
 public sealed class AppearanceConfig
 {
+    /// <summary>当前预设主题名；custom 表示用户已手动微调，不再跟随预设。</summary>
+    public string Preset { get; set; } = "custom";
+
     public string BackgroundMode { get; set; } = "acrylic";
     public double Opacity { get; set; } = 0.30;
     public string BlurLevel { get; set; } = "medium";
@@ -56,6 +65,9 @@ public sealed class AppearanceConfig
     public string ShadowLevel { get; set; } = "medium";
     public ReflectionConfig Reflection { get; set; } = new();
     public string AccentSource { get; set; } = "system";
+
+    /// <summary>自定义强调色（#AARRGGBB）；空串表示跟随系统强调色（6.10 颜色组）。</summary>
+    public string AccentColor { get; set; } = "";
 }
 
 /// <summary>倒影参数（M1 仅落配置，不做渲染）。</summary>
@@ -127,6 +139,23 @@ public sealed class BehaviorConfig
     /// 不做任何网络上报。默认开启，供 8.1 全量回归；对稳态开销 <0.1%。
     /// </summary>
     public bool MetricsEnabled { get; set; } = true;
+
+    // ---- M3 系统区按钮（WD-024 / FR-6.12）----
+
+    /// <summary>是否显示系统区（回收站 / 任务视图 / 显示桌面）。</summary>
+    public bool ShowSystemArea { get; set; }
+
+    public bool ShowRecycleBin { get; set; } = true;
+    public bool ShowTaskView { get; set; } = true;
+    public bool ShowShowDesktop { get; set; } = true;
+
+    // ---- M4 增强（WD-030 / WD-032）----
+
+    /// <summary>Dock 侧最小化反馈动效（WD-032 / 6.9 降级方案，不劫持系统动画）。</summary>
+    public bool MinimizeFeedbackEnabled { get; set; } = true;
+
+    /// <summary>允许从资源管理器拖入 .exe/.lnk/文件夹添加固定项（WD-030 / FR-303）。</summary>
+    public bool DragDropAddEnabled { get; set; } = true;
 }
 
 /// <summary>固定项；type = app | uwp | separator。</summary>
@@ -170,6 +199,12 @@ public static class ConfigRanges
     public static readonly string[] TaskbarModes = { "replace", "coexist", "beautify" };
     public static readonly string[] Languages = { "zh-CN", "en" };
     public static readonly string[] Positions = { "bottom", "left", "right" };
+
+    /// <summary>预设主题标识（WD-023）：custom 为手动微调，其余为内置预设。</summary>
+    public static readonly string[] Presets =
+    {
+        "custom", "macosLight", "macosDark", "mono", "cyber", "glass",
+    };
     public static readonly string[] IconShapes = { "rect", "roundedRect", "circle" };
     public static readonly string[] BackgroundModes = { "none", "solid", "acrylic", "mica", "image" };
     public static readonly string[] BlurLevels = { "low", "medium", "high" };

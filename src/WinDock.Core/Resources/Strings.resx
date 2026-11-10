@@ -85,4 +85,72 @@
   <data name="Settings_GuideScheduled" xml:space="preserve"><value>已设置：下次启动 WinDock 时会重新显示首次引导。</value></data>
   <data name="Tray_RecoveryTitle" xml:space="preserve"><value>WinDock 上次异常退出</value></data>
   <data name="Tray_RecoveryText" xml:space="preserve"><value>看门狗已自动恢复原生任务栏（当前为「仅美化」模式，任务栏本就未被隐藏）。如有需要可在托盘菜单重新打开设置。</value></data>
+
+  <!-- M3/M4 设置窗口新增 -->
+  <data name="Settings_GroupLayout" xml:space="preserve"><value>布局</value></data>
+  <data name="Settings_GroupMaterial" xml:space="preserve"><value>材质与外观</value></data>
+  <data name="Settings_GroupAdvanced" xml:space="preserve"><value>高级</value></data>
+  <data name="Settings_Preset" xml:space="preserve"><value>预设主题</value></data>
+  <data name="Settings_PresetCustom" xml:space="preserve"><value>自定义</value></data>
+  <data name="Settings_PresetMacosLight" xml:space="preserve"><value>macOS 浅色</value></data>
+  <data name="Settings_PresetMacosDark" xml:space="preserve"><value>macOS 深色</value></data>
+  <data name="Settings_PresetMono" xml:space="preserve"><value>极简黑白</value></data>
+  <data name="Settings_PresetCyber" xml:space="preserve"><value>赛博霓虹</value></data>
+  <data name="Settings_PresetGlass" xml:space="preserve"><value>毛玻璃通透</value></data>
+  <data name="Settings_Position" xml:space="preserve"><value>位置</value></data>
+  <data name="Settings_PosBottom" xml:space="preserve"><value>底部</value></data>
+  <data name="Settings_PosLeft" xml:space="preserve"><value>左侧</value></data>
+  <data name="Settings_PosRight" xml:space="preserve"><value>右侧</value></data>
+  <data name="Settings_IconShape" xml:space="preserve"><value>图标形状</value></data>
+  <data name="Settings_ShapeRect" xml:space="preserve"><value>矩形</value></data>
+  <data name="Settings_ShapeRounded" xml:space="preserve"><value>圆角矩形</value></data>
+  <data name="Settings_ShapeCircle" xml:space="preserve"><value>圆形</value></data>
+  <data name="Settings_Padding" xml:space="preserve"><value>内边距</value></data>
+  <data name="Settings_OffsetFromEdge" xml:space="preserve"><value>距屏幕边缘</value></data>
+  <data name="Settings_BlurLevel" xml:space="preserve"><value>模糊强度</value></data>
+  <data name="Settings_BlurLow" xml:space="preserve"><value>低</value></data>
+  <data name="Settings_BlurMedium" xml:space="preserve"><value>中</value></data>
+  <data name="Settings_BlurHigh" xml:space="preserve"><value>高</value></data>
+  <data name="Settings_ShadowLevel" xml:space="preserve"><value>阴影</value></data>
+  <data name="Settings_ShadowNone" xml:space="preserve"><value>无</value></data>
+  <data name="Settings_ShadowWeak" xml:space="preserve"><value>弱</value></data>
+  <data name="Settings_ShadowMedium" xml:space="preserve"><value>中</value></data>
+  <data name="Settings_ShadowStrong" xml:space="preserve"><value>强</value></data>
+  <data name="Settings_Reflection" xml:space="preserve"><value>倒影</value></data>
+  <data name="Settings_ReflectionStrength" xml:space="preserve"><value>倒影强度</value></data>
+  <data name="Settings_AccentColor" xml:space="preserve"><value>强调色</value></data>
+  <data name="Settings_AccentSystem" xml:space="preserve"><value>跟随系统</value></data>
+  <data name="Settings_Language" xml:space="preserve"><value>语言</value></data>
+  <data name="Settings_LangZh" xml:space="preserve"><value>简体中文</value></data>
+  <data name="Settings_LangEn" xml:space="preserve"><value>English</value></data>
+  <data name="Settings_TaskbarMode" xml:space="preserve"><value>任务栏共存方式</value></data>
+  <data name="Settings_ModeReplace" xml:space="preserve"><value>完全替换（隐藏原生任务栏）</value></data>
+  <data name="Settings_ModeCoexist" xml:space="preserve"><value>精简共存（保留托盘区）</value></data>
+  <data name="Settings_ModeBeautify" xml:space="preserve"><value>仅美化（保留原生任务栏）</value></data>
+  <data name="Settings_SystemArea" xml:space="preserve"><value>系统区按钮</value></data>
+  <data name="Settings_ShowRecycleBin" xml:space="preserve"><value>回收站</value></data>
+  <data name="Settings_ShowTaskView" xml:space="preserve"><value>任务视图</value></data>
+  <data name="Settings_ShowShowDesktop" xml:space="preserve"><value>显示桌面</value></data>
+  <data name="Settings_MinimizeFeedback" xml:space="preserve"><value>最小化时图标落入 Dock（Dock 侧反馈动效）</value></data>
+  <data name="Settings_UpdateCheck" xml:space="preserve"><value>检查更新</value></data>
+  <data name="Settings_UpdateUpToDate" xml:space="preserve"><value>当前已是最新版本（离线版本，无自动更新服务器）。</value></data>
+  <data name="Settings_Export" xml:space="preserve"><value>导出配置</value></data>
+  <data name="Settings_Import" xml:space="preserve"><value>导入配置</value></data>
+  <data name="Settings_ExportTitle" xml:space="preserve"><value>导出配置</value></data>
+  <data name="Settings_ImportTitle" xml:space="preserve"><value>导入配置</value></data>
+  <data name="Settings_ExportDone" xml:space="preserve"><value>配置已导出。</value></data>
+  <data name="Settings_ImportDone" xml:space="preserve"><value>配置已导入并生效。</value></data>
+  <data name="Settings_ImportFailed" xml:space="preserve"><value>导入失败：文件不是合法的 WinDock 配置。</value></data>
+  <data name="Settings_JsonFilter" xml:space="preserve"><value>WinDock 配置 (*.json)|*.json|所有文件 (*.*)|*.*</value></data>
+
+  <!-- M3 系统区 -->
+  <data name="Dock_RecycleBin" xml:space="preserve"><value>回收站</value></data>
+  <data name="Dock_TaskView" xml:space="preserve"><value>任务视图</value></data>
+  <data name="Dock_ShowDesktop" xml:space="preserve"><value>显示桌面</value></data>
+  <data name="Menu_EmptyRecycleBin" xml:space="preserve"><value>清空回收站</value></data>
+  <data name="Dialog_EmptyRecycleBinTitle" xml:space="preserve"><value>清空回收站</value></data>
+  <data name="Dialog_EmptyRecycleBinText" xml:space="preserve"><value>确定要永久删除回收站中的所有项目吗？此操作不可撤销。</value></data>
+  <data name="Menu_OpenFolder" xml:space="preserve"><value>打开文件夹</value></data>
+  <data name="Error_FolderNotFound" xml:space="preserve"><value>文件夹不存在或不可访问。</value></data>
+  <data name="Menu_JumpList" xml:space="preserve"><value>最近/常用</value></data>
 </root>
