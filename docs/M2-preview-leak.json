@@ -1,0 +1,371 @@
+{
+  "pid": 7864,
+  "icon": "Weixin",
+  "cycles": [
+    {
+      "cycle": 1,
+      "icon_center": [
+        905,
+        1337
+      ],
+      "panel_opened": true,
+      "panel_closed_on_leave": false,
+      "base": {
+        "working_set_mb": 88.06,
+        "private_mb": 195.67,
+        "handles": 681,
+        "gdi": 26,
+        "user": 41,
+        "dock_windows": 3
+      },
+      "during_hover": {
+        "working_set_mb": 86.94,
+        "private_mb": 192.58,
+        "handles": 683,
+        "gdi": 26,
+        "user": 43,
+        "dock_windows": 4
+      },
+      "after_close": {
+        "working_set_mb": 93.96,
+        "private_mb": 192.54,
+        "handles": 681,
+        "gdi": 26,
+        "user": 42,
+        "dock_windows": 4
+      },
+      "delta_hover": {
+        "working_set_mb": -1.12,
+        "private_mb": -3.09,
+        "handles": 2,
+        "gdi": 0,
+        "user": 2,
+        "dock_windows": 1
+      },
+      "delta_after_close": {
+        "working_set_mb": 5.9,
+        "private_mb": -3.13,
+        "handles": 0,
+        "gdi": 0,
+        "user": 1,
+        "dock_windows": 1
+      },
+      "cpu_seconds_hover": 0.125
+    },
+    {
+      "cycle": 2,
+      "icon_center": [
+        1301,
+        1337
+      ],
+      "panel_opened": true,
+      "panel_closed_on_leave": true,
+      "base": {
+        "working_set_mb": 99.32,
+        "private_mb": 193.13,
+        "handles": 680,
+        "gdi": 26,
+        "user": 40,
+        "dock_windows": 3
+      },
+      "during_hover": {
+        "working_set_mb": 102.97,
+        "private_mb": 194.21,
+        "handles": 646,
+        "gdi": 26,
+        "user": 43,
+        "dock_windows": 4
+      },
+      "after_close": {
+        "working_set_mb": 103.24,
+        "private_mb": 193.97,
+        "handles": 646,
+        "gdi": 28,
+        "user": 41,
+        "dock_windows": 2
+      },
+      "delta_hover": {
+        "working_set_mb": 3.65,
+        "private_mb": 1.08,
+        "handles": -34,
+        "gdi": 0,
+        "user": 3,
+        "dock_windows": 1
+      },
+      "delta_after_close": {
+        "working_set_mb": 3.92,
+        "private_mb": 0.84,
+        "handles": -34,
+        "gdi": 2,
+        "user": 1,
+        "dock_windows": -1
+      },
+      "cpu_seconds_hover": 0.359
+    },
+    {
+      "cycle": 3,
+      "icon_center": [
+        1301,
+        1337
+      ],
+      "panel_opened": true,
+      "panel_closed_on_leave": true,
+      "base": {
+        "working_set_mb": 102.98,
+        "private_mb": 193.97,
+        "handles": 646,
+        "gdi": 26,
+        "user": 41,
+        "dock_windows": 3
+      },
+      "during_hover": {
+        "working_set_mb": 103.91,
+        "private_mb": 194.15,
+        "handles": 648,
+        "gdi": 26,
+        "user": 44,
+        "dock_windows": 4
+      },
+      "after_close": {
+        "working_set_mb": 104.24,
+        "private_mb": 193.93,
+        "handles": 647,
+        "gdi": 28,
+        "user": 41,
+        "dock_windows": 2
+      },
+      "delta_hover": {
+        "working_set_mb": 0.93,
+        "private_mb": 0.18,
+        "handles": 2,
+        "gdi": 0,
+        "user": 3,
+        "dock_windows": 1
+      },
+      "delta_after_close": {
+        "working_set_mb": 1.26,
+        "private_mb": -0.04,
+        "handles": 1,
+        "gdi": 2,
+        "user": 0,
+        "dock_windows": -1
+      },
+      "cpu_seconds_hover": 0.484
+    },
+    {
+      "cycle": 4,
+      "icon_center": [
+        1301,
+        1337
+      ],
+      "panel_opened": true,
+      "panel_closed_on_leave": true,
+      "base": {
+        "working_set_mb": 104.04,
+        "private_mb": 193.92,
+        "handles": 647,
+        "gdi": 26,
+        "user": 41,
+        "dock_windows": 3
+      },
+      "during_hover": {
+        "working_set_mb": 104.42,
+        "private_mb": 194.04,
+        "handles": 649,
+        "gdi": 26,
+        "user": 44,
+        "dock_windows": 4
+      },
+      "after_close": {
+        "working_set_mb": 105.13,
+        "private_mb": 194.13,
+        "handles": 647,
+        "gdi": 28,
+        "user": 41,
+        "dock_windows": 2
+      },
+      "delta_hover": {
+        "working_set_mb": 0.38,
+        "private_mb": 0.12,
+        "handles": 2,
+        "gdi": 0,
+        "user": 3,
+        "dock_windows": 1
+      },
+      "delta_after_close": {
+        "working_set_mb": 1.09,
+        "private_mb": 0.21,
+        "handles": 0,
+        "gdi": 2,
+        "user": 0,
+        "dock_windows": -1
+      },
+      "cpu_seconds_hover": 0.297
+    },
+    {
+      "cycle": 5,
+      "icon_center": [
+        1301,
+        1337
+      ],
+      "panel_opened": true,
+      "panel_closed_on_leave": true,
+      "base": {
+        "working_set_mb": 104.91,
+        "private_mb": 194.12,
+        "handles": 647,
+        "gdi": 26,
+        "user": 41,
+        "dock_windows": 3
+      },
+      "during_hover": {
+        "working_set_mb": 107.11,
+        "private_mb": 194.66,
+        "handles": 655,
+        "gdi": 26,
+        "user": 45,
+        "dock_windows": 4
+      },
+      "after_close": {
+        "working_set_mb": 107.31,
+        "private_mb": 194.38,
+        "handles": 653,
+        "gdi": 28,
+        "user": 41,
+        "dock_windows": 2
+      },
+      "delta_hover": {
+        "working_set_mb": 2.2,
+        "private_mb": 0.54,
+        "handles": 8,
+        "gdi": 0,
+        "user": 4,
+        "dock_windows": 1
+      },
+      "delta_after_close": {
+        "working_set_mb": 2.4,
+        "private_mb": 0.26,
+        "handles": 6,
+        "gdi": 2,
+        "user": 0,
+        "dock_windows": -1
+      },
+      "cpu_seconds_hover": 0.172
+    },
+    {
+      "cycle": 6,
+      "icon_center": [
+        1301,
+        1337
+      ],
+      "panel_opened": true,
+      "panel_closed_on_leave": true,
+      "base": {
+        "working_set_mb": 107.05,
+        "private_mb": 194.38,
+        "handles": 653,
+        "gdi": 26,
+        "user": 41,
+        "dock_windows": 3
+      },
+      "during_hover": {
+        "working_set_mb": 107.38,
+        "private_mb": 194.84,
+        "handles": 655,
+        "gdi": 26,
+        "user": 44,
+        "dock_windows": 4
+      },
+      "after_close": {
+        "working_set_mb": 107.82,
+        "private_mb": 194.66,
+        "handles": 653,
+        "gdi": 28,
+        "user": 41,
+        "dock_windows": 2
+      },
+      "delta_hover": {
+        "working_set_mb": 0.33,
+        "private_mb": 0.46,
+        "handles": 2,
+        "gdi": 0,
+        "user": 3,
+        "dock_windows": 1
+      },
+      "delta_after_close": {
+        "working_set_mb": 0.77,
+        "private_mb": 0.28,
+        "handles": 0,
+        "gdi": 2,
+        "user": 0,
+        "dock_windows": -1
+      },
+      "cpu_seconds_hover": 0.297
+    }
+  ],
+  "control_idle": {
+    "before": {
+      "working_set_mb": 107.82,
+      "private_mb": 194.66,
+      "handles": 653,
+      "gdi": 28,
+      "user": 41,
+      "dock_windows": 2
+    },
+    "after": {
+      "working_set_mb": 107.78,
+      "private_mb": 194.59,
+      "handles": 650,
+      "gdi": 28,
+      "user": 41,
+      "dock_windows": 2
+    },
+    "delta": {
+      "working_set_mb": -0.04,
+      "private_mb": -0.07,
+      "handles": -3,
+      "gdi": 0,
+      "user": 0,
+      "dock_windows": 0
+    }
+  },
+  "gdi_delta_per_cycle": [
+    0,
+    2,
+    2,
+    2,
+    2,
+    2
+  ],
+  "private_delta_per_cycle_mb": [
+    -3.13,
+    0.84,
+    -0.04,
+    0.21,
+    0.26,
+    0.28
+  ],
+  "verdict": {
+    "kind": "no-accumulation",
+    "note": "关闭瞬间会有 +2 GDI 之类的瞬时抖动，但下一轮起点回到原值（振荡而非累积）；6 轮后 GDI 漂移 2、私有字节漂移 -1.0MB",
+    "gdi_drift": 2,
+    "private_drift_mb": -1.01,
+    "handle_drift": -28,
+    "gdi_after_close_series": [
+      26,
+      28,
+      28,
+      28,
+      28,
+      28
+    ],
+    "private_after_close_series_mb": [
+      192.5,
+      194.0,
+      193.9,
+      194.1,
+      194.4,
+      194.7
+    ]
+  }
+}
