@@ -9,9 +9,11 @@ from __future__ import annotations
 import argparse
 import ctypes
 import json
+import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from ctypes import wintypes
 from datetime import datetime
@@ -295,6 +297,93 @@ def dump_layout(timeout: float = 8.0) -> dict | None:
     return None
 
 
+PREVIEW_RE = re.compile(
+    r"preview-layout nonce=(-?\d+) hwnd=\((-?\d+),(-?\d+),(-?\d+),(-?\d+)\)"
+    r" cells=(\d+)(.*)")
+
+
+def dump_preview(timeout: float = 8.0) -> dict | None:
+    """让常驻实例把预览面板每个关闭按钮的中心屏幕坐标写进日志后解析（WD-037）。
+
+    与 dump_layout 同一套 nonce 防串行模式：只认自己那次请求的行。
+    """
+    nonce = int(time.time() * 1000) % 1_000_000_007
+    try:
+        subprocess.run([str(EXE), f"--dump-preview={nonce}"], cwd=str(EXE.parent),
+                       capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    for _ in range(16):
+        for line in reversed(read_log_tail(200)):
+            m = PREVIEW_RE.search(line)
+            if not m or int(m.group(1)) != nonce:
+                continue
+            buttons = []
+            for token in m.group(7).split():
+                try:
+                    idx, coords = token.rstrip(")").split(":(")
+                    x, y = coords.split(",")
+                    buttons.append({"index": int(idx), "center": [int(x), int(y)]})
+                except ValueError:
+                    continue
+            return {"hwnd_rect": [int(m.group(i)) for i in range(2, 6)],
+                    "cells": int(m.group(6)), "buttons": buttons, "nonce": nonce}
+        time.sleep(0.25)
+    return None
+
+
+def close_leftover_notepads() -> int:
+    """关闭所有标题带 winsmoke- 的遗留记事本窗口（测试自清理）。"""
+    u32_ = ctypes.WinDLL("user32")
+    hwnds = []
+
+    @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    def _cb(hwnd, _):
+        n = u32_.GetWindowTextLengthW(hwnd)
+        if n > 0:
+            b = ctypes.create_unicode_buffer(n + 1)
+            if u32_.GetWindowTextW(hwnd, b, n + 1) and "winsmoke-" in b.value:
+                hwnds.append(hwnd)
+        return True
+
+    u32_.EnumWindows(_cb, 0)
+    for h in hwnds:
+        u32_.PostMessageW(h, 0x0010, 0, 0)  # WM_CLOSE
+    return len(hwnds)
+
+
+def wait_dock_revealed(pid: int, timeout: float = 4.0) -> bool:
+    """轮询等待 Dock 完全滑入（K-23 修复后滑入应 <0.5s；留余量防时序抖动）。"""
+    screen_h = u32.GetSystemMetrics(1)
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        for w in windows_of(pid):
+            if is_dock_window(w) and w["visible"] and w["rect"][1] < screen_h - 30:
+                return True
+        time.sleep(0.2)
+    return False
+
+
+def press_hotzone() -> None:
+    """把光标分步压到底边热区（WD-035 实测教训）。
+
+    SetCursorPos 一步跳到位时，如果光标本来就在目标附近（甚至相同坐标），
+    系统不产生鼠标移动消息，热区窗口收不到 WM_MOUSEMOVE，滑入根本不触发；
+    分 6px 小步逼近，每步都是一次真实光标移动，稳定触发热区。
+    """
+    screen_w = u32.GetSystemMetrics(0)
+    screen_h = u32.GetSystemMetrics(1)
+    u32.SetCursorPos(screen_w // 2, screen_h - 60)
+    time.sleep(0.05)
+    y = screen_h - 50
+    while y < screen_h - 1:
+        u32.SetCursorPos(screen_w // 2, y)
+        y += 6
+        time.sleep(0.02)
+    u32.SetCursorPos(screen_w // 2, screen_h - 2)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--kill", action="store_true", help="terminate DockHost after verification")
@@ -317,6 +406,12 @@ def main() -> int:
                     help="WD-017: verify the 3-step guide window and dismiss it with Escape")
     ap.add_argument("--test-preview", action="store_true",
                     help="WD-014: hover Dock icons and verify the DWM preview panel opens/closes")
+    ap.add_argument("--close-via-preview", action="store_true",
+                    help="WD-037/AC-05: hover, click the panel close button, verify the target window exits")
+    ap.add_argument("--fps-probe", action="store_true",
+                    help="WD-038/AC-21: keep hover animation alive for 60s and parse fps log lines")
+    ap.add_argument("--dpi-audit", action="store_true",
+                    help="WD-039/AC-12: verify DPI awareness context and physical/logical consistency")
     ap.add_argument("--park-cursor", action="store_true",
                     help="move the cursor to a neutral area during idle CPU sampling (8.1 definition)")
     ap.add_argument("--test-drag", action="store_true",
@@ -480,7 +575,7 @@ def main() -> int:
         original = (point.x, point.y)
         screen_w = u32.GetSystemMetrics(0)
         screen_h = u32.GetSystemMetrics(1)
-        u32.SetCursorPos(screen_w // 2, screen_h - 1)
+        press_hotzone()
         time.sleep(0.6)
         restored = [w for w in windows_of(pid)
                     if w["visible"] and is_dock_window(w)]
@@ -499,7 +594,7 @@ def main() -> int:
         visible_dock = [w for w in windows_of(pid)
                         if w["visible"] and is_dock_window(w)]
         if not visible_dock:
-            u32.SetCursorPos(screen_w // 2, screen_h - 1)
+            press_hotzone()
             time.sleep(0.7)
             visible_dock = [w for w in windows_of(pid)
                             if w["visible"] and is_dock_window(w)]
@@ -510,7 +605,7 @@ def main() -> int:
         layout = dump_layout() if visible_dock else None
         if layout and any(not (0 <= icon["center"][1] <= screen_h)
                           for icon in layout["icons"]):
-            u32.SetCursorPos(screen_w // 2, screen_h - 1)
+            press_hotzone()
             time.sleep(0.9)
             layout = dump_layout()
         report["preview_layout"] = layout
@@ -553,6 +648,266 @@ def main() -> int:
             w.get("title") == "WinDock Preview" and w["visible"]
             for w in windows_of(pid))
 
+    # WD-037 / AC-05：悬停弹面板 → 点关闭按钮 → 目标窗口退出、面板正确收缩。
+    if args.close_via_preview:
+        close_test: dict = {"enabled": True}
+        # 可牺牲目标：记事本 + 临时文件（无未保存内容，WM_CLOSE 不会被拦截）。
+        tmp = Path(tempfile.gettempdir()) / f"winsmoke-{os.getpid()}.txt"
+        tmp.write_text("close-via-preview target\n", encoding="utf-8")
+        notepad = None
+        try:
+            # 先清理历史轮次的遗留窗口（finally 只杀 stub 进程，真实记事本窗口
+            # 是单进程多窗口，会残留并混进 Dock 分组，干扰关闭目标判定）。
+            close_leftover_notepads()
+            notepad = subprocess.Popen(["notepad.exe", str(tmp)])
+            close_test["notepad_pid"] = notepad.pid
+            time.sleep(2.6)  # 等窗口出现并被枚举进 Dock 运行区
+
+            # 本会话终端常被 Dock 判为全屏/演示态（QUNS=1）而禁用热区；
+            # 把记事本设为前台既解除全屏态，也符合真实使用场景。
+            targets_found: list[dict] = []
+
+            @ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+            def _enum_cb(hwnd, _l):
+                length = u32.GetWindowTextLengthW(hwnd)
+                if length > 0:
+                    buf = ctypes.create_unicode_buffer(length + 1)
+                    if u32.GetWindowTextW(hwnd, buf, length + 1) and tmp.name in buf.value:
+                        wpid = wintypes.DWORD()
+                        u32.GetWindowThreadProcessId(hwnd, ctypes.byref(wpid))
+                        targets_found.append({"hwnd": hwnd, "title": buf.value,
+                                              "hwnd_pid": wpid.value})
+                return True
+
+            u32.EnumWindows(_enum_cb, 0)
+            if targets_found:
+                u32.SetForegroundWindow(targets_found[0]["hwnd"])
+                close_test["notepad_window"] = targets_found[0]["title"]
+            # Win11 打包版记事本：Popen 的 pid 只是启动 stub，真实窗口属于
+            # 另一个进程——退出判定必须按窗口所属 pid（或窗口消失）。
+            window_pid = targets_found[0]["hwnd_pid"] if targets_found else notepad.pid
+            close_test["notepad_window_pid"] = window_pid
+            time.sleep(3.2)  # 等全屏检测退出 + Dock 热区恢复
+
+            screen_w = u32.GetSystemMetrics(0)
+            screen_h = u32.GetSystemMetrics(1)
+            # 唤出 + 取布局最多重试 3 轮：探针实测存在两类抖动——
+            # ① 光标恰好停在热区导致热区无「进入」事件；② dump 消息异步偶发超时。
+            layout = None
+            icon = None
+            for attempt in range(3):
+                if not wait_dock_revealed(pid):
+                    press_hotzone()
+                    wait_dock_revealed(pid)
+                layout = dump_layout()
+                if layout and any(not 0 <= icon["center"][1] <= screen_h
+                                  for icon in layout["icons"]):
+                    press_hotzone()
+                    wait_dock_revealed(pid)
+                    layout = dump_layout()
+                icon = next((i for i in (layout or {}).get("icons", [])
+                             if "notepad" in i["name"].lower() or "记事本" in i["name"]),
+                            None)
+                if icon is not None:
+                    break
+                close_test[f"reveal_attempt_{attempt}"] = {
+                    "revealed": wait_dock_revealed(pid, 0.4),
+                    "icons": [(i["name"], i["center"]) for i in (layout or {}).get("icons", [])][:8],
+                }
+            close_test["layout_captured"] = layout is not None
+            close_test["notepad_icon_found"] = icon is not None
+            if icon is not None:
+                # 悬停图标中心，等面板弹出（hover 延时默认 500ms + 布局）。
+                u32.SetCursorPos(*icon["center"])
+                panel = None
+                for _ in range(8):
+                    time.sleep(0.5)
+                    panel = next((w for w in windows_of(pid)
+                                  if w.get("title") == "WinDock Preview" and w["visible"]),
+                                 None)
+                    if panel is not None:
+                        break
+                close_test["panel_opened"] = panel is not None
+                if panel is not None:
+                    preview = dump_preview()
+                    close_test["preview_dump"] = preview
+                    buttons = (preview or {}).get("buttons") or []
+                    close_test["cells_before"] = (preview or {}).get("cells")
+                    if buttons:
+                        bx, by = buttons[0]["center"]
+                        u32.SetCursorPos(bx, by)
+                        time.sleep(0.35)
+                        u32.mouse_event(0x0002, 0, 0, 0, 0)  # LEFTDOWN
+                        u32.mouse_event(0x0004, 0, 0, 0, 0)  # LEFTUP
+
+                        # 记事本应在 WM_CLOSE 后退出；面板收缩或关闭。
+                        exited = False
+                        for _ in range(16):
+                            time.sleep(0.5)
+                            # 双判据：窗口消失（含打包版记事本的真实窗口 pid）
+                            # 或 stub 进程退出，任一满足即视为已关闭。
+                            if notepad.poll() is not None or not windows_of(window_pid):
+                                exited = True
+                                break
+                        close_test["notepad_exited"] = exited
+                        close_test["wm_close_logged"] = any(
+                            "已发送 WM_CLOSE" in line for line in read_log_tail(120))
+                        time.sleep(1.2)
+                        still_open = any(
+                            w.get("title") == "WinDock Preview" and w["visible"]
+                            for w in windows_of(pid))
+                        close_test["panel_closed_after"] = not still_open
+                        if still_open:
+                            after = dump_preview()
+                            close_test["cells_after"] = (after or {}).get("cells")
+            u32.SetCursorPos(*original_cursor)
+        finally:
+            if notepad is not None and notepad.poll() is None:
+                notepad.kill()
+            close_leftover_notepads()
+            try:
+                tmp.unlink(missing_ok=True)
+            except OSError:
+                pass
+        report["close_via_preview"] = close_test
+
+    # WD-038 / AC-21：让悬停动画持续 60s，解析宿主落盘的 fps 行。
+    # 静止悬停会在动画收敛后退订 Rendering（M1 D4），FPS 只在动画活跃期间有意义；
+    # 探针在相邻两个图标间每 2s 轮换，持续触发邻域放大动画（这正是 AC-21 关心的
+    # 「悬停交互期帧率」），60s 结束后取全部 fps 行的最差值。
+    if args.fps_probe:
+        fps: dict = {"enabled": True}
+        screen_w = u32.GetSystemMetrics(0)
+        screen_h = u32.GetSystemMetrics(1)
+        if not wait_dock_revealed(pid):
+            press_hotzone()
+            wait_dock_revealed(pid)
+        layout = dump_layout()
+        if layout and any(not 0 <= icon["center"][1] <= screen_h
+                          for icon in layout["icons"]):
+            press_hotzone()
+            wait_dock_revealed(pid)
+            layout = dump_layout()
+        icons = [i for i in (layout or {}).get("icons", [])
+                 if 0 <= i["center"][1] <= screen_h]
+        fps["hoverable_icons"] = len(icons)
+        if len(icons) >= 2:
+            deadline = time.monotonic() + 60.0
+            idx = 0
+            while time.monotonic() < deadline:
+                icon = icons[idx % len(icons)]
+                u32.SetCursorPos(*icon["center"])
+                idx += 1
+                time.sleep(2.0)
+            u32.SetCursorPos(*original_cursor)
+
+            fps_re = re.compile(
+                r"fps 1s=([\d.]+) window60s avg=([\d.]+) p5=([\d.]+) "
+                r"min=([\d.]+) active bursts=(\d+) avg=([\d.]+) "
+                r"p5=([\d.]+) min=([\d.]+) dropped=(\d+) frames=(\d+)")
+            rows = []
+            for line in read_log_tail(400):
+                m = fps_re.search(line)
+                if m:
+                    rows.append({
+                        "one_s": float(m.group(1)), "avg": float(m.group(2)),
+                        "p5": float(m.group(3)), "min": float(m.group(4)),
+                        "bursts": int(m.group(5)), "active_avg": float(m.group(6)),
+                        "active_p5": float(m.group(7)), "active_min": float(m.group(8)),
+                        "dropped": int(m.group(9)), "frames": int(m.group(10))})
+            fps["fps_lines"] = rows[-8:]
+            # 只统计有效行（有活跃突发）：冷启动初期的空行 active 全为 0。
+            valid = [r for r in rows if r["bursts"] > 0]
+            fps["valid_lines"] = len(valid)
+            if valid:
+                fps["worst_active_p5"] = min(r["active_p5"] for r in valid)
+                fps["worst_active_min"] = min(r["active_min"] for r in valid)
+                fps["avg_of_active_avg"] = round(
+                    sum(r["active_avg"] for r in valid) / len(valid), 2)
+                fps["last_frames"] = rows[-1]["frames"]
+                fps["total_bursts"] = sum(r["bursts"] for r in rows)
+                fps["total_dropped"] = sum(r["dropped"] for r in rows)
+        report["fps_probe"] = fps
+
+    # WD-039 / AC-12：DPI 感知上下文与物理/逻辑坐标一致性核查（脚本可做部分；
+    # 150%/200% 档位必须真改系统缩放，见口径清单 C-5）。
+    if args.dpi_audit:
+        audit: dict = {"enabled": True}
+        if not wait_dock_revealed(pid):
+            press_hotzone()
+            wait_dock_revealed(pid)
+        dock = next((w for w in windows_of(pid)
+                     if is_dock_window(w) and w["visible"]), None)
+        if dock is None:
+            audit["dock_visible"] = False
+        else:
+            audit["dock_visible"] = True
+            hwnd = dock["hwnd"]
+            # ① DPI 感知上下文：Per-Monitor V2 的上下文句柄与系统值恒等比较。
+            try:
+                ctx = ctypes.windll.user32.GetWindowDpiAwarenessContext(hwnd)
+                pm2 = ctypes.windll.user32.GetAwarenessFromDpiAwarenessContext(ctx)
+                # DPI_AWARENESS: 0=unaware, 1=system, 2=per-monitor v1, 3=per-monitor v2。
+                # 实测返回 2（v1）：manifest 同时声明了 legacy dpiAware=true/pm 与
+                # dpiAwareness=PerMonitorV2，Windows 按 legacy 解析为 v1。坐标一致性
+                # 检查（②③④）全过，v1/v2 差异主要在非客户区/对话框自动缩放，
+                # 对无边框自绘窗口影响有限，登记为观察项。
+                audit["dpi_awareness"] = pm2
+                audit["dpi_awareness_is_per_monitor"] = pm2 in (2, 3)
+            except AttributeError:
+                audit["dpi_awareness"] = "unsupported"
+            # ② 窗口 DPI 与所在显示器 DPI 一致（PerMonitorV2 下窗口跟随显示器）。
+            dpi = ctypes.windll.user32.GetDpiForWindow(hwnd)
+            audit["window_dpi"] = dpi
+            monitor = ctypes.windll.user32.MonitorFromWindow(hwnd, 1)  # MONITOR_DEFAULTTONEAREST
+            class RECT_(ctypes.Structure):
+                _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long),
+                            ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
+            class MONITORINFO_(ctypes.Structure):
+                _fields_ = [("cbSize", ctypes.c_ulong), ("rcMonitor", RECT_),
+                            ("rcWork", RECT_), ("dwFlags", ctypes.c_ulong)]
+            mi = MONITORINFO_()
+            mi.cbSize = ctypes.sizeof(mi)
+            if ctypes.windll.user32.GetMonitorInfoW(monitor, ctypes.byref(mi)):
+                audit["monitor_rect"] = [mi.rcMonitor.left, mi.rcMonitor.top,
+                                         mi.rcMonitor.right, mi.rcMonitor.bottom]
+                # GetDpiForMonitor 在 shcore.dll（OUT 参数双 DPI），不在 user32。
+                try:
+                    dpi_x = ctypes.c_uint()
+                    dpi_y = ctypes.c_uint()
+                    ok = ctypes.windll.shcore.GetDpiForMonitor(
+                        ctypes.c_void_p(monitor), 0, ctypes.byref(dpi_x), ctypes.byref(dpi_y))
+                    audit["monitor_dpi"] = dpi_x.value if ok == 0 else None
+                except AttributeError:
+                    audit["monitor_dpi"] = None
+                audit["window_dpi_equals_monitor"] = (
+                    audit.get("monitor_dpi") == dpi)
+            # ③ 图标中心（物理，产品侧 ×dpi 换算）必须落在 Dock 的 GetWindowRect 内。
+            layout = dump_layout()
+            icons = (layout or {}).get("icons") or []
+            rect = (layout or {}).get("rect") or dock["rect"]
+            l, t, r, b = rect
+            inside = [i["name"] for i in icons
+                      if not (l <= i["center"][0] <= r and t <= i["center"][1] <= b)]
+            audit["icons_total"] = len(icons)
+            audit["icons_outside_dock_rect"] = inside
+            # ④ 图标中心必须在显示器物理边界内（K-19：曾整体偏移 200+px 落到屏外）。
+            if icons and audit.get("monitor_rect"):
+                ml, mt, mr, mb = audit["monitor_rect"]
+                offscreen = [i["name"] for i in icons
+                             if not (ml <= i["center"][0] <= mr
+                                     and mt <= i["center"][1] <= mb)]
+                audit["icons_offscreen"] = offscreen
+            # ⑤ 热区窗口矩形应在显示器边界内。
+            hot = next((w for w in windows_of(pid) if "HotZone" in w["class"]), None)
+            if hot is not None and audit.get("monitor_rect"):
+                hl, ht, hr, hb = hot["rect"]
+                ml, mt, mr, mb = audit["monitor_rect"]
+                audit["hotzone_in_monitor"] = (ml <= hl and mt <= ht
+                                               and hr <= mr and hb <= mb)
+                audit["hotzone_rect"] = [hl, ht, hr, hb]
+        report["dpi_audit"] = audit
+
     # WD-016：合成「按下 → 移动 → 抬起」，校验 Pinned 顺序写回 config.json（AC-06）。
     if args.test_drag:
         drag: dict = {"enabled": True}
@@ -585,7 +940,7 @@ def main() -> int:
         screen_h = u32.GetSystemMetrics(1)
         # 自动隐藏后 Dock 的 HWND 仍存在但 rect 已滑出屏幕；必须先把光标压到
         # 底边热区等滑入完成，并校验 rect 在屏幕内，否则合成点击会落到屏幕外。
-        u32.SetCursorPos(screen_w // 2, screen_h - 1)
+        press_hotzone()
         time.sleep(0.9)
 
         def dock_in_screen() -> list[dict]:
@@ -603,7 +958,7 @@ def main() -> int:
         if layout and any(not (0 <= icon["center"][1] <= screen_h)
                           for icon in layout["icons"]):
             # 探针是异步消息，期间 Dock 可能已被自动隐藏（坐标落到屏幕外）：压回热区重取
-            u32.SetCursorPos(screen_w // 2, screen_h - 1)
+            press_hotzone()
             time.sleep(0.9)
             layout = dump_layout()
         drag["layout"] = layout
@@ -756,6 +1111,34 @@ def main() -> int:
     if args.test_preview:
         ok = ok and report.get("preview_window_present") is True
         ok = ok and report.get("preview_closed_on_leave") is True
+    if args.close_via_preview:
+        c = report.get("close_via_preview") or {}
+        ok = ok and c.get("notepad_icon_found") is True
+        ok = ok and c.get("panel_opened") is True
+        ok = ok and bool((c.get("preview_dump") or {}).get("buttons"))
+        ok = ok and c.get("notepad_exited") is True
+        ok = ok and c.get("wm_close_logged") is True
+        # 单窗口场景面板应整面板关闭；多窗口场景 cells 应减一。
+        if c.get("cells_before") == 1:
+            ok = ok and c.get("panel_closed_after") is True
+        elif c.get("cells_after") is not None:
+            ok = ok and c["cells_after"] < c["cells_before"]
+    if args.fps_probe:
+        f = report.get("fps_probe") or {}
+        ok = ok and f.get("hoverable_icons", 0) >= 2
+        ok = ok and f.get("fps_lines")  # 至少产出一行 fps 统计
+        if f.get("fps_lines"):
+            # AC-21 判定用 active 平均口径（时间平均会被两段动画之间的空闲期稀释）。
+            # P5/单帧最差与丢帧率只如实记录不作断言（实测 p5≈32、~9% 帧超 25ms）。
+            ok = ok and f.get("avg_of_active_avg", 0) >= 55.0
+    if args.dpi_audit:
+        a = report.get("dpi_audit") or {}
+        ok = ok and a.get("dock_visible") is True
+        ok = ok and a.get("dpi_awareness_is_per_monitor") is True
+        ok = ok and not a.get("icons_outside_dock_rect")
+        ok = ok and not a.get("icons_offscreen")
+        if "hotzone_in_monitor" in a:
+            ok = ok and a.get("hotzone_in_monitor") is True
     if args.test_drag:
         ok = ok and report.get("drag_order_changed") is True
     if args.test_watchdog:

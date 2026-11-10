@@ -84,6 +84,25 @@ public partial class App : Application
             return;
         }
 
+        if (Array.Exists(e.Args,
+                a => a.StartsWith("--dump-preview", StringComparison.OrdinalIgnoreCase)))
+        {
+            // WD-037 自动化探针：让常驻实例把预览面板每个关闭按钮的屏幕坐标
+            // 写进日志（带 nonce 防读到旧行），本进程立即退出。
+            string? arg = Array.Find(e.Args,
+                a => a.StartsWith("--dump-preview", StringComparison.OrdinalIgnoreCase));
+            long nonce = 0;
+            int eq = arg?.IndexOf('=') ?? -1;
+            if (eq > 0)
+            {
+                _ = long.TryParse(arg![(eq + 1)..], out nonce);
+            }
+
+            PostToDockHosts("WinDock.DumpPreview.v1", nonce);
+            Shutdown(0);
+            return;
+        }
+
         _mutex = new Mutex(initiallyOwned: true, MutexName, out bool createdNew);
         if (!createdNew)
         {

@@ -343,6 +343,82 @@ public static class SelfTest
 
             // 22. 配置开关字段存在且默认开启
             Check("MetricsEnabled 默认开启", new DockConfig().Behavior.MetricsEnabled);
+
+            // 23. WD-037 / AC-05：CloseWindow 与 CloseAll 走同一 WM_CLOSE 路径
+            {
+                var launcher = new AppLauncher(log);
+                int single = 0, batch = 0;
+                launcher.PostCloseHook = _ => { single++; return true; };
+                Check("CloseWindow 投递单条 WM_CLOSE",
+                    launcher.CloseWindow(new AppWindowInfo { Handle = (IntPtr)0x1111, Title = "w1" })
+                    && single == 1, $"hook 调用 {single} 次");
+
+                launcher.PostCloseHook = _ => { batch++; return true; };
+                var group = new AppWindowGroup { Key = "g", DisplayName = "g" };
+                group.Windows.Add(new AppWindowInfo { Handle = (IntPtr)0x21, Title = "a" });
+                group.Windows.Add(new AppWindowInfo { Handle = (IntPtr)0x22, Title = "b" });
+                group.Windows.Add(new AppWindowInfo { Handle = (IntPtr)0x23, Title = "c" });
+                launcher.CloseAll(group);
+                Check("CloseAll 复用同一路径（3 窗口 = 3 次投递）",
+                    batch == 3 && batch == group.Windows.Count,
+                    $"hook 调用 {batch} 次 / 期望 3");
+
+                int failures = 0;
+                launcher.PostCloseHook = _ => { failures++; return false; };
+                Check("投递失败返回 false（窗口已退出）",
+                    !launcher.CloseWindow(new AppWindowInfo { Handle = (IntPtr)0x33 })
+                    && failures == 1);
+            }
+
+            // 24. WD-038 / AC-21：FrameRateCounter 帧率统计（纯逻辑）
+            {
+                var smooth = new FrameRateCounter();
+                for (int i = 0; i < 120; i++)
+                {
+                    smooth.AddFrame(i * 17); // 17ms ≈ 58.8 FPS，无丢帧
+                }
+
+                FrameRateSnapshot snap = smooth.Snapshot();
+                Check("17ms 帧序列 → 平均 FPS ≈ 58.8 且零丢帧",
+                    Math.Abs(snap.WindowAvg - 58.82) < 2.0 && snap.Dropped == 0,
+                    $"avg={snap.WindowAvg}, dropped={snap.Dropped}");
+
+                var choppy = new FrameRateCounter();
+                for (int i = 0; i < 60; i++)
+                {
+                    choppy.AddFrame(i * 33); // 33ms ≈ 30.3 FPS，每帧间隔都超丢帧阈值
+                }
+
+                FrameRateSnapshot bad = choppy.Snapshot();
+                Check("33ms 帧序列 → 平均 FPS ≈ 30 且逐帧计丢帧",
+                    Math.Abs(bad.WindowAvg - 30.3) < 2.0 && bad.Dropped == 59,
+                    $"avg={bad.WindowAvg}, dropped={bad.Dropped}");
+                Check("最近 1 秒帧数与序列一致（33ms → ~30 帧）",
+                    Math.Abs(bad.Last1s - 30) <= 1, $"last1s={bad.Last1s}");
+                Check("活跃突发统计（AC-21 口径）：连续序列成 1 个突发、active=window",
+                    bad.Bursts == 1 && Math.Abs(bad.ActiveAvg - bad.WindowAvg) < 0.5,
+                    $"bursts={bad.Bursts}, active={bad.ActiveAvg}");
+
+                // 空闲分隔：两段 60FPS 动画之间隔 2s，时间平均被稀释但 active 不受影响。
+                var gapped = new FrameRateCounter();
+                for (int i = 0; i < 60; i++)
+                {
+                    gapped.AddFrame(i * 17);
+                }
+
+                for (int i = 0; i < 30; i++)
+                {
+                    gapped.AddFrame(2000 + i * 17);
+                }
+
+                FrameRateSnapshot sep = gapped.Snapshot();
+                Check("空闲分隔不计丢帧、active 突发独立统计",
+                    sep.Dropped == 0 && sep.Bursts == 2
+                    && Math.Abs(sep.ActiveAvg - 58.82) < 2.0
+                    && sep.WindowAvg < 45.0,
+                    $"dropped={sep.Dropped}, bursts={sep.Bursts}, " +
+                    $"active={sep.ActiveAvg}, window={sep.WindowAvg}");
+            }
         }
         catch (Exception ex)
         {

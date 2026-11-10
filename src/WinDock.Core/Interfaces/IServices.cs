@@ -91,13 +91,18 @@ public interface IAnimationEngine : IDisposable
     void Slide(double target);
 }
 
-/// <summary>启动、激活、关闭窗口（FR-301 / AC-04）。</summary>
+/// <summary>启动、激活、关闭窗口（FR-301 / AC-04 / WD-037 AC-05 关闭按钮）。</summary>
 public interface IAppLauncher
 {
     bool Launch(PinnedItem item);
     bool NewWindow(PinnedItem item);
     bool Activate(AppWindowGroup group);
     bool Activate(AppWindowInfo window);
+
+    /// <summary>向单个窗口发送 WM_CLOSE（异步；窗口可拒绝，如未保存提示）。返回是否投递成功。</summary>
+    bool CloseWindow(AppWindowInfo window);
+
+    /// <summary>批量关闭（走 <see cref="CloseWindow"/> 同一路径，避免两套 WM_CLOSE 逻辑）。</summary>
     void CloseAll(AppWindowGroup group);
 }
 

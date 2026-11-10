@@ -59,6 +59,8 @@
   <data name="Preview_WindowCount" xml:space="preserve"><value>{0} windows</value></data>
   <data name="Preview_Minimized" xml:space="preserve"><value>Minimized</value></data>
   <data name="Preview_Untitled" xml:space="preserve"><value>Untitled window</value></data>
+  <data name="Preview_CloseWindow" xml:space="preserve"><value>Close this window</value></data>
+  <data name="Error_CloseFailed" xml:space="preserve"><value>Close request failed (window may have exited)</value></data>
   <data name="Tray_Guide" xml:space="preserve"><value>First-run guide...</value></data>
   <data name="Guide_S1_Title" xml:space="preserve"><value>Welcome to WinDock</value></data>
   <data name="Guide_S1_Text" xml:space="preserve"><value>WinDock shows a macOS-style floating Dock at the bottom of the screen for launching, switching and managing your apps. This version never hides or modifies the native Windows taskbar and never changes system files. You can exit at any time from the tray icon.</value></data>

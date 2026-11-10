@@ -59,6 +59,8 @@
   <data name="Preview_WindowCount" xml:space="preserve"><value>{0} 个窗口</value></data>
   <data name="Preview_Minimized" xml:space="preserve"><value>已最小化</value></data>
   <data name="Preview_Untitled" xml:space="preserve"><value>无标题窗口</value></data>
+  <data name="Preview_CloseWindow" xml:space="preserve"><value>关闭此窗口</value></data>
+  <data name="Error_CloseFailed" xml:space="preserve"><value>关闭请求投递失败（窗口可能已退出）</value></data>
   <data name="Tray_Guide" xml:space="preserve"><value>首次引导…</value></data>
   <data name="Guide_S1_Title" xml:space="preserve"><value>欢迎使用 WinDock</value></data>
   <data name="Guide_S1_Text" xml:space="preserve"><value>WinDock 会在屏幕底部显示一条 macOS 风格的悬浮 Dock，用来启动、切换和管理常用应用。当前版本不会隐藏或修改 Windows 原生任务栏，也不会改动系统文件；随时可以从托盘图标退出。</value></data>

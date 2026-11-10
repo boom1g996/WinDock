@@ -1,0 +1,104 @@
+{
+  "timestamp": "2026-11-10T14:52:29",
+  "exe": "D:\\workspace\\W&dock\\artifacts\\WinDock-framework-dependent\\DockHost.exe",
+  "cursor_original": [
+    -165,
+    715
+  ],
+  "early_exit_code": null,
+  "pid": 20596,
+  "started_new_process": true,
+  "windows": [
+    {
+      "hwnd": 724330,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1398,
+        2240,
+        1400
+      ],
+      "size": [
+        2240,
+        2
+      ],
+      "visible": true
+    }
+  ],
+  "visible_window_count": 1,
+  "dock_window_present": true,
+  "auto_hidden": true,
+  "hotzone_windows": [
+    {
+      "hwnd": 724330,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1398,
+        2240,
+        1400
+      ],
+      "size": [
+        2240,
+        2
+      ],
+      "visible": true
+    }
+  ],
+  "settle_seconds": 2.0,
+  "cold_start_cpu_seconds": 1.312,
+  "sample_seconds": 2.0,
+  "idle_cpu_percent": 0.0,
+  "working_set_mb": 199.08,
+  "log_errors": [],
+  "log_tail": [
+    "[Metrics][INFO] 2026-11-10 14:52:30.809 fps 1s=1.0 window60s avg=0.0 p5=0.0 min=0.0 active bursts=0 avg=0.0 p5=0.0 min=0.0 dropped=0 frames=1",
+    "[AutoHide][INFO] 2026-11-10 14:52:30.829 自动隐藏=True, 延迟=800ms, 全屏隐藏=True",
+    "[WindowEnum][INFO] 2026-11-10 14:52:30.833 事件钩子就绪，初始枚举已排队（后台线程）",
+    "[Dock][INFO] 2026-11-10 14:52:30.986 已尝试启用系统 Acrylic 背板（分层窗口下可能被系统忽略）",
+    "[Hotkey][INFO] 2026-11-10 14:52:30.988 全局快捷键 Ctrl+Alt+D 已注册",
+    "[Metrics][INFO] 2026-11-10 14:52:31.050 mark startup.first_show",
+    "[Watchdog][INFO] 2026-11-10 14:52:31.076 看门狗已启动 pid=33216，阈值=10000ms，心跳间隔=3333ms",
+    "[Watchdog][INFO] 2026-11-10 14:52:31.199 启动：宿主 pid=20596，失联阈值=10000ms",
+    "[Watchdog][INFO] 2026-11-10 14:52:31.236 心跳 #1 间隔=106498984ms 耗时=7.1ms",
+    "[Metrics][INFO] 2026-11-10 14:52:32.637 cpu-spike window: 1062.5ms/2s → ui.animation_frame×88, ui.rebuild_icons×2, enumerate.refresh×1, fullscreen.check×1, watchdog.heartbeat_write×1",
+    "[Watchdog][INFO] 2026-11-10 14:52:34.410 心跳 #2 间隔=3172ms 耗时=0.2ms",
+    "[Metrics][INFO] 2026-11-10 14:52:34.621 cpu-spike window: 31.2ms/2s → fullscreen.check×1, watchdog.heartbeat_write×1"
+  ],
+  "close_via_preview": {
+    "enabled": true,
+    "notepad_pid": 34556,
+    "notepad_window": "winsmoke-25712.txt - Notepad",
+    "notepad_window_pid": 36724,
+    "layout_captured": true,
+    "notepad_icon_found": true,
+    "panel_opened": true,
+    "preview_dump": {
+      "hwnd_rect": [
+        931,
+        1095,
+        1168,
+        1290
+      ],
+      "cells": 1,
+      "buttons": [
+        {
+          "index": 0,
+          "center": [
+            1139,
+            1266
+          ]
+        }
+      ],
+      "nonce": 293554431
+    },
+    "cells_before": 1,
+    "notepad_exited": true,
+    "wm_close_logged": true,
+    "panel_closed_after": true
+  },
+  "log_errors_late": [],
+  "verdict": "PASS"
+}

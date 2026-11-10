@@ -2,9 +2,9 @@
 
 把 Windows 11 任务栏改造成 macOS Dock 风格的桌面应用：悬浮胶囊、邻域放大、运行指示点、窗口缩略图预览、首次启动引导、自动隐藏、拖拽排序、独立进程看门狗与多屏适配。
 
-> **当前阶段**：M1 MVP（WD-001~013）已落地；**M2 六批已实施**（需求 14.1 已满足）：第一批预研 / 骨架 / WD-018 图标缓存，第二批 WD-019 动画 + WD-015 自动隐藏 / 热区 / 全屏 / 热键，第三批 WD-014 缩略图预览 + WD-017 首次引导，第四批 WD-016 拖拽排序 + WD-020 独立进程 Watchdog，第五批 WD-033 内置打点与 CPU 突发归因 + WD-034 托盘去 WinForms 化，第六批 K-17 交互复核 + WD-035 长稳采样器 + **K-02 自包含单文件发布达成**。Release 构建 0 警告 0 错误（**无 WinForms 依赖**）、离线自检 **38/38**、全功能冒烟 **PASS**（拖拽落盘 / 预览开合 / 看门狗强杀恢复 + 优雅握手）。
+> **当前阶段**：M1 MVP（WD-001~013）已落地；**M2 八批已实施**（需求 14.1 已满足）：一预研/骨架、二动画+自动隐藏/热区/全屏/热键、三缩略图预览+首次引导、四拖拽排序+独立看门狗、五打点归因+托盘去 WinForms、六 K-17 复核+长稳采样器+**K-02 自包含发布**、七内存台阶诊断（K-21/K-22）、**八 AC-05 关闭按钮（WD-037）+ AC-21 帧率统计（WD-038，57.18FPS 达标）+ AC-12 DPI 审计（WD-039）+ K-23 滑入冻结修复**。Release 构建 0 警告 0 错误（无 WinForms 依赖）、离线自检 **46/46**、全功能冒烟 PASS。
 >
-> **性能如实说明**：稳态 CPU 突发根因已定位为周期性唤醒的 15.6ms 记账刻度（枚举移后台 / 全屏退避 / 心跳间隔）。第六批为修 K-18 看门狗假阳性把心跳从 5s 收紧到 3.3s，30s 稳态 CPU **0.573%**（分段 0~0.938%，无大突发）；**对照实验关闭看门狗 = 0.104% ≤0.3% 达标**——8.1 与 AC-11 的 UI 心跳存在内在张力，口径待产品确认（K-13）。**注意口径**：需求 8.1 / AC-20 写的是「任务管理器 **5 分钟平均**」，长稳采样按 5 分钟滚动窗口算得 **0.17~0.19%（≤0.3%，达标率 1.0，初步待 24h 定稿）**；30s 单次采样的 0.573% 是 15.6ms 记账粒度放大，**不适合用来判 8.1**。内存 **199MB**（去 WinForms 后原 ~218MB），仍 >120MB（WPF D3D / Intel 驱动结构性开销，K-01/K-14）。**长稳实证进行中**（`tools/stability_m1.py` 24h 采样），数据齐全前不宣称「1 天不崩」。详见 [M2 变更说明与已知问题](docs/M2-变更说明与已知问题.md)；进度见 [M2 设计说明与任务拆解](docs/M2-设计说明与任务拆解.md) §4.1~4.6。
+> **性能如实说明**：CPU——需求 8.1 口径为「任务管理器 5 分钟平均」：长稳 2.41h 均值 **0.212%**、安静样本窗口达标率 93.8%（`docs/M2-stability.summary.json`）；30s 单次 0.573% 属 15.6ms 记账粒度放大，不适合判 8.1；关看门狗对照 0.104%。内存——工作集 ~200MB、私有字节预热后 148~191MB（净漂移 -34MB），≤120MB 任一口径未达标（WPF D3D 结构性开销，K-01/K-14 转产品决策）。帧率——AC-21 活跃口径 **57.18 FPS ≥55 达标**（P5≈32 偶发掉帧如实登记）。长稳按用户决策以 **2.41h 部分实证**收口（0 崩溃 0 恢复 0 错误），跨天/睡眠唤醒场景留 M2 验收补证。详见 [M2 变更说明与已知问题](docs/M2-变更说明与已知问题.md)；进度见 [M2 设计说明与任务拆解](docs/M2-设计说明与任务拆解.md) §4.1~4.7。
 
 ## 项目管理
 
@@ -35,6 +35,9 @@
 | [M2-smoke-batch6-k17.json](docs/M2-smoke-batch6-k17.json) | 第六批：解锁后全功能冒烟（拖拽 / 预览 / 看门狗 PASS，K-17 关闭） |
 | [M2-smoke-batch6-idle.json](docs/M2-smoke-batch6-idle.json) | 第六批 30s 纯稳态（3.3s 心跳，0.573% / 199MB） |
 | [M2-stability.jsonl](docs/M2-stability.jsonl) | WD-035 长稳采样（60s/点，逐行 JSON；`--summary` 生成同名 `.summary.json`：5 分钟滚动均值 + 达标窗口占比 + 宿主 pid 分段 + GDI/USER 漂移） |
+| [M2-smoke-batch7-close.json](docs/M2-smoke-batch7-close.json) | 第八批：预览面板关闭按钮全链路（悬停→点击→WM_CLOSE→目标退出→面板收缩） |
+| [M2-smoke-batch7-fps.json](docs/M2-smoke-batch7-fps.json) | 第八批：60s 悬停帧率（活跃突发口径 57.18FPS；P5/掉帧如实登记） |
+| [M2-smoke-batch7-dpi.json](docs/M2-smoke-batch7-dpi.json) | 第八批：DPI 审计（感知上下文/坐标一致性/图标命中/热区，125%） |
 | [M1-smoke-result.json](docs/M1-smoke-result.json) | M1 交付冒烟原始结果（窗口 / CPU / 内存 / 日志错误） |
 | [BACKLOG](docs/BACKLOG.md) | 5 里程碑 / 39 议题（含 M2 新增 4 条）/ 17 标签 |
 | [M0-probe-raw.json](docs/M0-probe-raw.json) | 只读系统探针原始输出 |
@@ -71,6 +74,14 @@ python tools/smoke_m1.py --restart --test-drag --test-preview --test-watchdog `
 # 纯稳态 30 秒基线（8.1 口径：光标停在中性区）
 python tools/smoke_m1.py --restart --park-cursor --sample-seconds 30 `
   --settle-seconds 10 --cpu-trace --output docs/M2-smoke-batch6-idle.json
+
+# 第八批：AC-05 关闭按钮 / AC-21 帧率 / AC-12 DPI 审计（需要交互式桌面，锁屏时全屏判定会隐藏 Dock）
+python tools/smoke_m1.py --close-via-preview --sample-seconds 2 --settle-seconds 2 \
+  --output docs/M2-smoke-batch7-close.json
+python tools/smoke_m1.py --fps-probe --sample-seconds 2 --settle-seconds 2 \
+  --output docs/M2-smoke-batch7-fps.json
+python tools/smoke_m1.py --dpi-audit --sample-seconds 2 --settle-seconds 2 \
+  --output docs/M2-smoke-batch7-dpi.json
 
 # WD-035 长稳实证：24h 采样（60s/点，可随时中断续采）+ 汇总
 # 默认会先做交互预热再取基线（K-21：冷启动后首次走通预览/拖拽会抬升一截内存，

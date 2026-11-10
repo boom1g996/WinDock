@@ -24,6 +24,7 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     private const string Module = "Dock";
     private const string PreviewOpenKey = "preview.open";
     private const string PreviewCloseKey = "preview.close";
+    private const string PreviewRefreshKey = "preview.close.refresh";
     private const string PreviewHoldReason = "preview";
     private const int PreviewCloseDelayMs = 300;
 
@@ -47,6 +48,8 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     private readonly IAnimationEngine _animation;
     private readonly IAppLauncher _launcher;
     private readonly IMetricsService? _metrics;
+    private readonly WinDock.Core.Services.FrameRateCounter _frameRate = new();
+    private long _nextFpsLogTick;
     private readonly List<DockIconControl> _iconControls = new();
     private DockConfig _current;
     private string _lastStructure = "";
@@ -212,6 +215,11 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
 
         _slideOffset = dip;
         Top = _baseTop + dip;
+        // K-23：滑入/滑出动画靠 CompositionTarget.Rendering 推进，而改 Top 只移动
+        // 窗口、不产生内容重绘——光标停在热区不动（无后续鼠标消息）时渲染管线
+        // 静默，实测滑入冻结在 12px 处（Dock 只露 10px peek）。这里每帧强制失效
+        // 一次视觉，保证动画活跃期间合成器持续出帧；静止时本方法不会被调用。
+        InvalidateVisual();
     }
 
     public void SetVisible(bool visible)
@@ -600,6 +608,11 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         panel.HoverLeft += (_, _) =>
             _timers.Schedule(PreviewCloseKey, PreviewCloseDelayMs, VerifyPreviewLeave);
         panel.ThumbnailActivated += (_, _) => ClosePreview();
+        // WD-037 / AC-05：单窗口关闭后刷新运行指示。WM_CLOSE 是异步请求，
+        // 延时 600ms 等目标窗口退出（枚举器的 WindowsChanged 也会自行触发，
+        // RefreshItems 幂等，两边重叠无害）。
+        panel.WindowClosed += (_, _) =>
+            _timers.Schedule(PreviewRefreshKey, 600, RefreshItems);
         _previewWindow = panel;
         _previewGroupKey = group.Key;
 
@@ -661,6 +674,23 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     private void OnAnimationFrame(object? sender, AnimationFrameEventArgs e)
     {
         _metrics?.Count("ui.animation_frame");
+        // WD-038 / AC-21：帧率统计只吃渲染回调（动画活跃才有帧，空闲无指标，
+        // 与「悬停 60s」口径一致）；不另起 Timer，顺带在帧回调里做 5s 节流。
+        long tick = Environment.TickCount64;
+        _frameRate.AddFrame(tick);
+        if (tick - _nextFpsLogTick >= 5000)
+        {
+            _nextFpsLogTick = tick;
+            var fps = _frameRate.Snapshot();
+            _log.Info("Metrics",
+                $"fps 1s={fps.Last1s:F1} window60s avg={fps.WindowAvg:F1} " +
+                $"p5={fps.WindowP5:F1} min={fps.WindowMin:F1} " +
+                $"active bursts={fps.Bursts} avg={fps.ActiveAvg:F1} " +
+                $"p5={fps.ActiveP5:F1} min={fps.ActiveMin:F1} " +
+                $"dropped={fps.Dropped} frames={fps.Frames}");
+
+        }
+
         if (!Dispatcher.CheckAccess())
         {
             Dispatcher.InvokeAsync(() => OnAnimationFrame(sender, e));

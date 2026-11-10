@@ -1,0 +1,97 @@
+{
+  "timestamp": "2026-11-10T14:38:40",
+  "exe": "D:\\workspace\\W&dock\\artifacts\\WinDock-framework-dependent\\DockHost.exe",
+  "cursor_original": [
+    1120,
+    1398
+  ],
+  "early_exit_code": null,
+  "pid": 33044,
+  "started_new_process": true,
+  "windows": [
+    {
+      "hwnd": 4131622,
+      "class": "HwndWrapper[DockHost;;0e97fb7a-b966-4de4-8bb1-e40e5155ea6a]",
+      "title": "",
+      "rect": [
+        820,
+        1233,
+        1421,
+        1390
+      ],
+      "size": [
+        601,
+        157
+      ],
+      "visible": true
+    }
+  ],
+  "visible_window_count": 1,
+  "dock_window_present": true,
+  "auto_hidden": false,
+  "hotzone_windows": [
+    {
+      "hwnd": 7736070,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1398,
+        2240,
+        1400
+      ],
+      "size": [
+        2240,
+        2
+      ],
+      "visible": false
+    }
+  ],
+  "settle_seconds": 2.0,
+  "cold_start_cpu_seconds": 1.328,
+  "sample_seconds": 2.0,
+  "idle_cpu_percent": 0.781,
+  "working_set_mb": 203.11,
+  "log_errors": [],
+  "log_tail": [
+    "[Metrics][INFO] 2026-11-10 14:38:41.658 fps 1s=1.0 window60s avg=0.0 p5=0.0 min=0.0 dropped=0 frames=1",
+    "[AutoHide][INFO] 2026-11-10 14:38:41.677 自动隐藏=True, 延迟=800ms, 全屏隐藏=True",
+    "[WindowEnum][INFO] 2026-11-10 14:38:41.680 事件钩子就绪，初始枚举已排队（后台线程）",
+    "[Dock][INFO] 2026-11-10 14:38:41.828 已尝试启用系统 Acrylic 背板（分层窗口下可能被系统忽略）",
+    "[Hotkey][INFO] 2026-11-10 14:38:41.832 全局快捷键 Ctrl+Alt+D 已注册",
+    "[Metrics][INFO] 2026-11-10 14:38:41.930 mark startup.first_show",
+    "[Watchdog][INFO] 2026-11-10 14:38:41.955 看门狗已启动 pid=27864，阈值=10000ms，心跳间隔=3333ms",
+    "[Watchdog][INFO] 2026-11-10 14:38:42.048 启动：宿主 pid=33044，失联阈值=10000ms",
+    "[Watchdog][INFO] 2026-11-10 14:38:42.074 心跳 #1 间隔=105669812ms 耗时=4.1ms",
+    "[Metrics][INFO] 2026-11-10 14:38:43.481 cpu-spike window: 1093.8ms/2s → ui.animation_frame×95, ui.rebuild_icons×3, enumerate.refresh×3, fullscreen.check×1, watchdog.heartbeat_write×1",
+    "[Watchdog][INFO] 2026-11-10 14:38:45.292 心跳 #2 间隔=3219ms 耗时=0.4ms",
+    "[Metrics][INFO] 2026-11-10 14:38:45.479 cpu-spike window: 31.2ms/2s → fullscreen.check×1, watchdog.heartbeat_write×1"
+  ],
+  "dpi_audit": {
+    "enabled": true,
+    "dock_visible": true,
+    "dpi_awareness": 2,
+    "dpi_awareness_is_per_monitor": true,
+    "window_dpi": 120,
+    "monitor_rect": [
+      0,
+      0,
+      2240,
+      1400
+    ],
+    "monitor_dpi": 120,
+    "window_dpi_equals_monitor": true,
+    "icons_total": 5,
+    "icons_outside_dock_rect": [],
+    "icons_offscreen": [],
+    "hotzone_in_monitor": true,
+    "hotzone_rect": [
+      0,
+      1398,
+      2240,
+      1400
+    ]
+  },
+  "log_errors_late": [],
+  "verdict": "PASS"
+}

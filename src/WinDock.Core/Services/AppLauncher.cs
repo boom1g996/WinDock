@@ -135,14 +135,53 @@ public sealed class AppLauncher : IAppLauncher
         return false;
     }
 
-    public void CloseAll(AppWindowGroup group)
+    public bool CloseWindow(AppWindowInfo window)
     {
-        foreach (AppWindowInfo window in group.Windows.ToList())
+        // WD-037 / AC-05：单窗口关闭。WM_CLOSE 是优雅关闭请求，窗口可拒绝
+        // （未保存提示等）；调用方负责在窗口枚举刷新后更新运行指示。
+        bool posted = PostClose(window.Handle);
+        if (posted)
         {
-            PostMessage(window.Handle, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
+            _log.Info(Module, $"已发送 WM_CLOSE：0x{window.Handle:X}（{window.Title}）");
+        }
+        else
+        {
+            _log.Warn(Module, $"WM_CLOSE 投递失败：0x{window.Handle:X}（{window.Title}）");
         }
 
-        _log.Info(Module, $"已发送 WM_CLOSE ×{group.Windows.Count}：{group.DisplayName}");
+        return posted;
+    }
+
+    public void CloseAll(AppWindowGroup group)
+    {
+        // 复用 CloseWindow 同一路径（一处 WM_CLOSE 实现，自检断言二者一致）。
+        int sent = 0;
+        List<AppWindowInfo> windows = group.Windows.ToList();
+        foreach (AppWindowInfo window in windows)
+        {
+            if (CloseWindow(window))
+            {
+                sent++;
+            }
+        }
+
+        _log.Info(Module, $"CloseAll 完成：{group.DisplayName} 发送 {sent}/{windows.Count}");
+    }
+
+    /// <summary>
+    /// WM_CLOSE 投递点。默认走 user32 PostMessage；
+    /// 自检用本属性替换成计数器，避免真关窗口。
+    /// </summary>
+    internal Func<IntPtr, bool>? PostCloseHook { get; set; }
+
+    private bool PostClose(IntPtr handle)
+    {
+        if (PostCloseHook is { } hook)
+        {
+            return hook(handle);
+        }
+
+        return PostMessage(handle, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
     }
 
     private bool ShellExecute(string file, string args)

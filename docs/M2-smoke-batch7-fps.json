@@ -1,0 +1,181 @@
+{
+  "timestamp": "2026-11-10T14:47:25",
+  "exe": "D:\\workspace\\W&dock\\artifacts\\WinDock-framework-dependent\\DockHost.exe",
+  "cursor_original": [
+    2036,
+    1246
+  ],
+  "early_exit_code": null,
+  "pid": 33824,
+  "started_new_process": true,
+  "windows": [
+    {
+      "hwnd": 1969204,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1398,
+        2240,
+        1400
+      ],
+      "size": [
+        2240,
+        2
+      ],
+      "visible": true
+    }
+  ],
+  "visible_window_count": 1,
+  "dock_window_present": true,
+  "auto_hidden": true,
+  "hotzone_windows": [
+    {
+      "hwnd": 1969204,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1398,
+        2240,
+        1400
+      ],
+      "size": [
+        2240,
+        2
+      ],
+      "visible": true
+    }
+  ],
+  "settle_seconds": 2.0,
+  "cold_start_cpu_seconds": 1.25,
+  "sample_seconds": 2.0,
+  "idle_cpu_percent": 0.781,
+  "working_set_mb": 199.75,
+  "log_errors": [],
+  "log_tail": [
+    "[Icon][INFO] 2026-11-10 14:47:26.216 PrivateExtractIconsW 导出可用=True；磁盘缓存启用=True",
+    "[Metrics][INFO] 2026-11-10 14:47:26.391 fps 1s=1.0 window60s avg=0.0 p5=0.0 min=0.0 active bursts=0 avg=0.0 p5=0.0 min=0.0 dropped=0 frames=1",
+    "[AutoHide][INFO] 2026-11-10 14:47:26.408 自动隐藏=True, 延迟=800ms, 全屏隐藏=True",
+    "[WindowEnum][INFO] 2026-11-10 14:47:26.412 事件钩子就绪，初始枚举已排队（后台线程）",
+    "[Dock][INFO] 2026-11-10 14:47:26.569 已尝试启用系统 Acrylic 背板（分层窗口下可能被系统忽略）",
+    "[Hotkey][INFO] 2026-11-10 14:47:26.576 全局快捷键 Ctrl+Alt+D 已注册",
+    "[Metrics][INFO] 2026-11-10 14:47:26.651 mark startup.first_show",
+    "[Watchdog][INFO] 2026-11-10 14:47:26.692 看门狗已启动 pid=34704，阈值=10000ms，心跳间隔=3333ms",
+    "[Watchdog][INFO] 2026-11-10 14:47:26.778 启动：宿主 pid=33824，失联阈值=10000ms",
+    "[Watchdog][INFO] 2026-11-10 14:47:26.809 心跳 #1 间隔=106194546ms 耗时=6.0ms",
+    "[Metrics][INFO] 2026-11-10 14:47:28.219 cpu-spike window: 968.8ms/2s → ui.animation_frame×75, ui.rebuild_icons×2, enumerate.refresh×1, fullscreen.check×1, watchdog.heartbeat_write×1",
+    "[Watchdog][INFO] 2026-11-10 14:47:30.026 心跳 #2 间隔=3219ms 耗时=0.5ms"
+  ],
+  "fps_probe": {
+    "enabled": true,
+    "hoverable_icons": 5,
+    "fps_lines": [
+      {
+        "one_s": 1.0,
+        "avg": 6.3,
+        "p5": 15.9,
+        "min": 0.2,
+        "bursts": 17,
+        "active_avg": 55.4,
+        "active_p5": 32.3,
+        "active_min": 12.7,
+        "dropped": 52,
+        "frames": 480
+      },
+      {
+        "one_s": 1.0,
+        "avg": 0.0,
+        "p5": 0.0,
+        "min": 0.0,
+        "bursts": 0,
+        "active_avg": 0.0,
+        "active_p5": 0.0,
+        "active_min": 0.0,
+        "dropped": 0,
+        "frames": 1
+      },
+      {
+        "one_s": 1.0,
+        "avg": 2.9,
+        "p5": 3.0,
+        "min": 0.1,
+        "bursts": 3,
+        "active_avg": 56.6,
+        "active_p5": 32.3,
+        "active_min": 32.3,
+        "dropped": 3,
+        "frames": 76
+      },
+      {
+        "one_s": 1.0,
+        "avg": 3.9,
+        "p5": 3.0,
+        "min": 0.1,
+        "bursts": 6,
+        "active_avg": 56.8,
+        "active_p5": 32.3,
+        "active_min": 21.3,
+        "dropped": 8,
+        "frames": 140
+      },
+      {
+        "one_s": 1.0,
+        "avg": 3.6,
+        "p5": 3.0,
+        "min": 0.1,
+        "bursts": 8,
+        "active_avg": 56.0,
+        "active_p5": 32.3,
+        "active_min": 21.3,
+        "dropped": 13,
+        "frames": 173
+      },
+      {
+        "one_s": 1.0,
+        "avg": 3.5,
+        "p5": 0.3,
+        "min": 0.1,
+        "bursts": 10,
+        "active_avg": 56.9,
+        "active_p5": 32.3,
+        "active_min": 21.3,
+        "dropped": 15,
+        "frames": 207
+      },
+      {
+        "one_s": 1.0,
+        "avg": 3.4,
+        "p5": 0.3,
+        "min": 0.1,
+        "bursts": 12,
+        "active_avg": 57.5,
+        "active_p5": 32.3,
+        "active_min": 21.3,
+        "dropped": 17,
+        "frames": 242
+      },
+      {
+        "one_s": 1.0,
+        "avg": 3.4,
+        "p5": 0.3,
+        "min": 0.1,
+        "bursts": 14,
+        "active_avg": 56.9,
+        "active_p5": 32.3,
+        "active_min": 21.3,
+        "dropped": 22,
+        "frames": 275
+      }
+    ],
+    "valid_lines": 14,
+    "worst_active_p5": 32.3,
+    "worst_active_min": 12.7,
+    "avg_of_active_avg": 57.18,
+    "last_frames": 275,
+    "total_bursts": 153,
+    "total_dropped": 313
+  },
+  "log_errors_late": [],
+  "verdict": "PASS"
+}

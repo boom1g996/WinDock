@@ -6,6 +6,7 @@ using System.Windows.Media;
 using WinDock.Core;
 using WinDock.Core.Interfaces;
 using WinDock.Core.Models;
+using WinDock.Core.Native;
 
 namespace WinDock;
 
@@ -25,6 +26,11 @@ public partial class PreviewWindow : Window
     private readonly IAppLauncher _launcher;
     private readonly ILogService _log;
     private readonly List<Border> _surfaces = new();
+    private readonly List<Button> _closeButtons = new();
+    private readonly List<WindowPreviewTarget> _targets = new();
+    private readonly uint _dumpPreviewMessage =
+        NativeMethods.RegisterWindowMessage("WinDock.DumpPreview.v1");
+    private string _headerApp = "";
     private bool _open;
 
     public PreviewWindow(IPreviewService preview, IAppLauncher launcher, ILogService log)
@@ -35,11 +41,30 @@ public partial class PreviewWindow : Window
         _log = log;
 
         SizeChanged += (_, _) => ApplyThumbnailLayout();
+        SourceInitialized += OnSourceInitialized;
         Closed += (_, _) =>
         {
             _open = false;
             _preview.Hide(); // 无论何种关闭路径都必须注销 HTHUMBNAIL（FR-404 / R7）
         };
+    }
+
+    private void OnSourceInitialized(object? sender, EventArgs e)
+    {
+        IntPtr handle = new WindowInteropHelper(this).Handle;
+        HwndSource? source = HwndSource.FromHwnd(handle);
+        source?.AddHook(WndProc);
+    }
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == unchecked((int)_dumpPreviewMessage))
+        {
+            DumpPreviewLayout(wParam.ToInt64());
+            handled = true;
+        }
+
+        return IntPtr.Zero;
     }
 
     /// <summary>鼠标进入面板：由宿主取消关闭倒计时。</summary>
@@ -51,6 +76,9 @@ public partial class PreviewWindow : Window
     /// <summary>点击缩略图并激活目标窗口后触发。</summary>
     public event EventHandler? ThumbnailActivated;
 
+    /// <summary>点击关闭按钮、WM_CLOSE 已投递后触发（宿主刷新运行指示与剩余窗口）。</summary>
+    public event EventHandler<WindowPreviewTarget>? WindowClosed;
+
     public bool IsOpen => _open;
 
     /// <summary>鼠标是否停留在面板上（宿主判定「Dock + 面板」联合区域用）。</summary>
@@ -60,6 +88,9 @@ public partial class PreviewWindow : Window
     public void Open(string appName, IReadOnlyList<WindowPreviewTarget> targets,
         Point anchorTopDip)
     {
+        _targets.Clear();
+        _targets.AddRange(targets);
+        _headerApp = appName;
         BuildItems(targets);
         HeaderText.Text = $"{appName} · {Loc.Instance.T("Preview_WindowCount", targets.Count)}";
 
@@ -93,6 +124,7 @@ public partial class PreviewWindow : Window
     private void BuildItems(IReadOnlyList<WindowPreviewTarget> targets)
     {
         _surfaces.Clear();
+        _closeButtons.Clear();
         ItemsPanel.Children.Clear();
 
         foreach (WindowPreviewTarget target in targets)
@@ -115,7 +147,6 @@ public partial class PreviewWindow : Window
                 Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
                 Cursor = Cursors.Hand,
-                ToolTip = target.Title,
                 Focusable = false,
             };
             WindowPreviewTarget captured = target;
@@ -141,18 +172,140 @@ public partial class PreviewWindow : Window
             }
 
             cell.Children.Add(grid);
-            cell.Children.Add(new TextBlock
-            {
-                Width = SurfaceWidth,
-                Margin = new Thickness(0, 5, 0, 0),
-                Text = string.IsNullOrWhiteSpace(target.Title)
-                    ? Loc.Instance.T("Preview_Untitled")
-                    : target.Title,
-                TextTrimming = TextTrimming.CharacterEllipsis,
-                Foreground = new SolidColorBrush(Color.FromArgb(220, 242, 244, 248)),
-            });
+            cell.Children.Add(BuildLabelBar(captured));
             ItemsPanel.Children.Add(cell);
         }
+    }
+
+    /// <summary>
+    /// WD-037 / AC-05：缩略图下方的 18px 标签条 = 标题 + 关闭按钮。
+    /// 关闭按钮必须放在缩略图矩形之外：DWM 缩略图直接绘制在本窗口 HWND 上，
+    /// 会盖住该矩形内的一切 WPF 元素（Header 文本同理置于矩形外）。
+    /// 标签条同时承担标题展示，替代原 ToolTip。
+    /// </summary>
+    private Grid BuildLabelBar(WindowPreviewTarget target)
+    {
+        var bar = new Grid { Width = SurfaceWidth, Height = 18, Margin = new Thickness(0, 4, 0, 0) };
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var title = new TextBlock
+        {
+            Text = string.IsNullOrWhiteSpace(target.Title)
+                ? Loc.Instance.T("Preview_Untitled")
+                : target.Title,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 4, 0),
+            Foreground = new SolidColorBrush(Color.FromArgb(220, 242, 244, 248)),
+        };
+        Grid.SetColumn(title, 0);
+        bar.Children.Add(title);
+
+        var close = new Button
+        {
+            Width = 18,
+            Height = 18,
+            Cursor = Cursors.Hand,
+            Focusable = false,
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Opacity = 0.75,
+            ToolTip = Loc.Instance.T("Preview_CloseWindow"),
+            Content = new System.Windows.Shapes.Path
+            {
+                Data = Geometry.Parse("M 3.5 3.5 L 14.5 14.5 M 14.5 3.5 L 3.5 14.5"),
+                Stroke = new SolidColorBrush(Color.FromArgb(230, 242, 244, 248)),
+                StrokeThickness = 1.4,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                Stretch = Stretch.None,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+        };
+        System.Windows.Automation.AutomationProperties.SetName(close,
+            Loc.Instance.T("Preview_CloseWindow"));
+        close.Click += (_, _) => CloseTarget(target);
+        _closeButtons.Add(close);
+        Grid.SetColumn(close, 1);
+        bar.Children.Add(close);
+        return bar;
+    }
+
+    /// <summary>
+    /// WD-037 自动化探针：把每个关闭按钮中心的屏幕物理坐标写入日志，
+    /// 格式：`preview-layout nonce=N cells=2 0:(x,y) 1:(x,y)`。
+    /// 坐标算法与 MainWindow.DumpIconLayout 一致（GetWindowRect + 布局偏移 × DPI），
+    /// 不用 PointToScreen（对本类窗口实测有原点偏差）。
+    /// </summary>
+    private void DumpPreviewLayout(long nonce)
+    {
+        try
+        {
+            DpiScale dpi = VisualTreeHelper.GetDpi(this);
+            IntPtr handle = new WindowInteropHelper(this).Handle;
+            NativeMethods.GetWindowRect(handle, out NativeMethods.RECT rect);
+
+            var parts = new List<string>(_closeButtons.Count);
+            for (int i = 0; i < _closeButtons.Count; i++)
+            {
+                Button button = _closeButtons[i];
+                if (!button.IsLoaded || button.ActualWidth <= 0)
+                {
+                    continue;
+                }
+
+                Point local = button.TransformToAncestor(this)
+                    .Transform(new Point(button.ActualWidth / 2, button.ActualHeight / 2));
+                int cx = rect.Left + (int)Math.Round(local.X * dpi.DpiScaleX);
+                int cy = rect.Top + (int)Math.Round(local.Y * dpi.DpiScaleY);
+                parts.Add($"{i}:({cx},{cy})");
+            }
+
+            _log.Info(Module,
+                $"preview-layout nonce={nonce} hwnd=({rect.Left},{rect.Top},{rect.Right},{rect.Bottom}) " +
+                $"cells={_closeButtons.Count} {string.Join(' ', parts)}");
+        }
+        catch (Exception ex)
+        {
+            _log.Warn(Module, $"导出预览布局失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>关闭单个窗口：投递 WM_CLOSE → 移除 cell → 重建 DWM 注册 → 剩 0 则关面板。</summary>
+    private void CloseTarget(WindowPreviewTarget target)
+    {
+        var info = new AppWindowInfo
+        {
+            Handle = target.Handle,
+            Title = target.Title,
+            IsMinimized = target.IsMinimized,
+        };
+        if (!_launcher.CloseWindow(info))
+        {
+            _log.Warn(Module, Loc.Instance.T("Error_CloseFailed"));
+            return;
+        }
+
+        _targets.Remove(target);
+        WindowClosed?.Invoke(this, target);
+
+        if (_targets.Count == 0)
+        {
+            ClosePanel();
+            return;
+        }
+
+        // 重建 cell 与 DWM 注册（面板窗口本身不重建，避免整面板闪烁）；
+        // SizeToContent 收缩后保持左缘锚定，居中漂移为短寿命浮层的已知取舍。
+        IntPtr hwnd = new WindowInteropHelper(this).Handle;
+        List<WindowPreviewTarget> remaining = _targets.ToList();
+        BuildItems(remaining);
+        _preview.Show(hwnd, remaining);
+        HeaderText.Text =
+            $"{_headerApp} · {Loc.Instance.T("Preview_WindowCount", remaining.Count)}";
+        ApplyThumbnailLayout();
     }
 
     private void Activate(WindowPreviewTarget target)
