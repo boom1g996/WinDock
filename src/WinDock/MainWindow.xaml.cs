@@ -127,7 +127,19 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
         // 倒影需要按图标区实际尺寸重建 Viewbox，尺寸变化时同步（FR-101）。
-        Capsule.SizeChanged += (_, _) => UpdateReflection(_current.Appearance.Reflection);
+        // 这里挂的是布局回调，异常会直接冒到 Dispatcher → 整窗崩溃（19:20 实机教训），
+        // 因此兜底吞掉并记日志：倒影是装饰性功能，绝不能拖垮主条。
+        Capsule.SizeChanged += (_, _) =>
+        {
+            try
+            {
+                UpdateReflection(_current.Appearance.Reflection);
+            }
+            catch (Exception ex)
+            {
+                _log.Warn(Module, "倒影重建失败（已跳过本次尺寸变化）：" + ex.Message);
+            }
+        };
 
         ApplyConfig(_current);
     }
@@ -1832,6 +1844,9 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         }
 
         double crop = Math.Min(height, panelHeight);
+        // 注意：VisualBrush 一旦绑定到**活的 Visual**（IconsPanel）就永远 CanFreeze=false，
+        // 强行 Freeze 会在 SizeChanged 里抛 InvalidOperationException（2026-11-10 实机崩溃根因）。
+        // 不冻结反而是想要的行为：图标变化时倒影自动跟随。
         var brush = new VisualBrush(IconsPanel)
         {
             Stretch = Stretch.Fill,
@@ -1840,7 +1855,6 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             ViewboxUnits = BrushMappingMode.Absolute,
             Viewbox = new Rect(0, panelHeight - crop, panelWidth, crop),
         };
-        brush.Freeze();
 
         // 倒影自上而下淡出（OpacityMask 是 UIElement 的属性，不是 Brush 的）。
         ReflectionVisual.OpacityMask = new LinearGradientBrush(

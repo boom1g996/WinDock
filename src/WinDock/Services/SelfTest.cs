@@ -559,6 +559,13 @@ public static class SelfTest
                     $"height={reflectionConfig.Appearance.Reflection.Height}, " +
                     $"strength={reflectionConfig.Appearance.Reflection.Strength}");
 
+                // FR-101 倒影：VisualBrush 绑定活 Visual 时 CanFreeze 恒为 false，
+                // 一旦调用 Freeze() 会在 SizeChanged 抛 InvalidOperationException（曾致整窗崩溃）。
+                var probeHtml = new System.Windows.Controls.StackPanel();
+                var probeBrush = new System.Windows.Media.VisualBrush(probeHtml);
+                Check("VisualBrush 绑定活 Visual 时不可冻结（倒影不得 Freeze）",
+                    !probeBrush.CanFreeze);
+
                 bool compatOk = true;
                 try
                 {
