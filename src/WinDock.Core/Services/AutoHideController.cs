@@ -62,6 +62,10 @@ public sealed class AutoHideController : IAutoHideController
         _enabled = config.Behavior.AutoHide;
         _hideDelayMs = config.Behavior.HideDelayMs;
         _fullScreenHide = config.Behavior.FullScreenHide;
+        // 配置关掉「全屏时隐藏」后，全屏态不应对 Dock 产生任何影响。
+        // 旧实现只在 OnFullScreenChanged 里判 _fullScreenHide，但 _inFullScreen 已经被置 true，
+        // 于是下面 `!_enabled && !_inFullScreen` 不成立 → 关掉自动隐藏也显示不出来（实机 bug）。
+        _inFullScreen = _fullScreenHide && _fullScreen.IsFullScreen;
         _slideDurationMs = 180;
         _animation.ConfigureMotion(config.Animation.IndicatorFadeMs, _slideDurationMs);
         _hotZone.Apply(config.Behavior.EdgeHotzonePx);
@@ -269,7 +273,8 @@ public sealed class AutoHideController : IAutoHideController
 
     private void OnFullScreenChanged(object? sender, bool full)
     {
-        _inFullScreen = full;
+        // 「全屏隐藏」关掉时，全屏态不影响 Dock：不隐藏、不禁用热区、不拦 Show。
+        _inFullScreen = full && _fullScreenHide;
         if (!_fullScreenHide)
         {
             return;

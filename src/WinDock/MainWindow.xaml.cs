@@ -104,6 +104,9 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     /// <summary>磨砂颗粒刷（64×64 平铺），只生成一次，进程内复用。</summary>
     private Brush? _noiseBrush;
 
+    /// <summary>SyncWindowSize 的重入保护：设置 Width/Height 会同步触发布局回调。</summary>
+    private bool _syncingSize;
+
     /// <param name="monitorOverride">
     /// 6.7 多显示器：副屏 Dock 传该屏的 monitor id（"1"/"2"…）；
     /// null 表示跟随配置 Dock.MonitorIds[0]。
@@ -152,11 +155,91 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
                 _log.Warn(Module, "倒影重建失败（已跳过本次尺寸变化）：" + ex.Message);
             }
 
+            // 胶囊尺寸变了（条目增减 / 倒影高度 / 间距配置热更），窗口矩形必须跟着长：
+            // 否则新增的图标会画到窗口外被 DWM 裁掉（"显示区域很窄"的直接表现）。
+            if (SyncWindowSize())
+            {
+                // 宽高变了要重新居中/贴边，否则 Dock 会从屏幕中心往右偏出去。
+                Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(Position));
+            }
+
             // 胶囊尺寸变了，玻璃的抓取矩形也过期了（去抖，滑入动画期间不会抓）。
             ScheduleGlassRefresh();
         };
 
         ApplyConfig(_current);
+
+        // 首帧之前就把窗口撑到内容尺寸：SizeToContent 已移除，否则窗口会先闪一个
+        // 0×0 / 1×1 的空窗再被撑开。
+        SyncWindowSize();
+    }
+
+    /// <summary>
+    /// 按内容实测尺寸设置窗口宽高（替代原来的 <c>SizeToContent="WidthAndHeight"</c>）。
+    /// </summary>
+    /// <remarks>
+    /// 2026-11-10 实机定位的「显示区域只剩很窄一条、点击区却是一个长方形」根因：
+    /// SizeToContent 的窗口在 <c>Visibility=Collapsed</c> 期间会被 WPF 收缩（K-22），
+    /// 恢复可见时复用的却是**上一次测量缓存**——实测停在"只有 + 按钮"时的 136×158 DIP，
+    /// 而 7 个图标实际横跨 588 DIP。多出来的图标被 DWM 裁到窗口矩形之外，
+    /// 于是"看得见的玻璃很窄"、"能点的只有那块长方形"，两者是同一个 bug。
+    ///
+    /// 显式宽高每次结构变化后按内容重算：不依赖 Visibility（顺带根治 K-22 的 2×2），
+    /// 且窗口矩形与可见胶囊严格对齐。留白只保留 Root.Margin 里给放大动画/阴影的余量。
+    /// </remarks>
+    /// <returns>true 表示窗口尺寸确实变了（调用方需要重新居中）。</returns>
+    private bool SyncWindowSize()
+    {
+        if (_syncingSize)
+        {
+            return false;
+        }
+
+        _syncingSize = true;
+        try
+        {
+            // 不限宽高测量内容：StackPanel 会把所有图标铺开，得到"装得下全部条目"的尺寸。
+            // Root.Margin 不在 DesiredSize 里（Margin 由父布局消费），必须自己加回来。
+            Root.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            Size content = Root.DesiredSize;
+            double w = Math.Ceiling(content.Width + Root.Margin.Left + Root.Margin.Right);
+            double h = Math.Ceiling(content.Height + Root.Margin.Top + Root.Margin.Bottom);
+
+            // 未完成首次布局时可能拿到 NaN/Infinity/0：保持上一次可用尺寸，不要写成 0。
+            if (!(w >= 1) || !(h >= 1) || double.IsInfinity(w) || double.IsInfinity(h))
+            {
+                return false;
+            }
+
+            // 注意 NaN：Window.Width 默认就是 NaN，而 `Math.Abs(NaN - w) > 0.4` 恒为 false，
+            // 只写差值判断会「一次都不赋值」（2026-11-10 实测：窗口永远停在首帧尺寸）。
+            bool changed = false;
+            if (double.IsNaN(Width) || Math.Abs(Width - w) > 0.4)
+            {
+                Width = w;
+                changed = true;
+            }
+
+            if (double.IsNaN(Height) || Math.Abs(Height - h) > 0.4)
+            {
+                Height = h;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                _log.Info(Module, $"窗口尺寸同步：content=({content.Width:F1},{content.Height:F1}) " +
+                                  $"margin=({Root.Margin.Left:F1},{Root.Margin.Top:F1}," +
+                                  $"{Root.Margin.Right:F1},{Root.Margin.Bottom:F1}) " +
+                                  $"-> {w:F1}x{h:F1}（条目 {_iconControls.Count}）");
+            }
+
+            return changed;
+        }
+        finally
+        {
+            _syncingSize = false;
+        }
     }
 
     /// <summary>
@@ -279,8 +362,8 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     private bool IsVertical => _current.Dock.Position is "left" or "right";
 
     public double HiddenDistance => (IsVertical
-        ? (ActualWidth > 0 ? ActualWidth : 126)
-        : (ActualHeight > 0 ? ActualHeight : 126)) + 8;
+        ? (Width > 0 ? Width : ActualWidth > 0 ? ActualWidth : 126)
+        : (Height > 0 ? Height : ActualHeight > 0 ? ActualHeight : 126)) + 8;
 
     public bool IsPointerOverDock => _pointerOver;
 
@@ -1468,6 +1551,13 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
 
     private void Position()
     {
+        // 内容可能刚变（条目增减 / 尺寸配置热更），先把窗口撑到实测尺寸再居中，
+        // 否则会拿上一次（可能已收缩的）尺寸算 Left，Dock 会偏到屏幕一侧。
+        SyncWindowSize();
+        // SizeToContent 已移除，Width/Height 是权威值；默认 NaN 时回落到 ActualWidth。
+        double winWidth = Width > 0 ? Width : ActualWidth;
+        double winHeight = Height > 0 ? Height : ActualHeight;
+
         // 默认主屏用 SystemParameters.WorkArea（按 DIP 且自动排除原生任务栏）；
         // WD-021：配置了非主屏（MonitorIds[0] = "1"/"2"…）时改用该显示器工作区。
         Rect work = SystemParameters.WorkArea;
@@ -1489,16 +1579,16 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             // WD-022：垂直居中、贴左/贴右；滑入滑出沿水平方向。
             _baseLeft = position == "left"
                 ? work.Left + _current.Dock.OffsetFromEdge
-                : work.Right - ActualWidth - _current.Dock.OffsetFromEdge;
-            _baseTop = work.Top + ((work.Height - ActualHeight) / 2.0);
+                : work.Right - winWidth - _current.Dock.OffsetFromEdge;
+            _baseTop = work.Top + ((work.Height - winHeight) / 2.0);
             double sign = position == "left" ? -1 : 1;
             Left = _baseLeft + (sign * _slideOffset);
             Top = _baseTop;
         }
         else
         {
-            _baseLeft = work.Left + ((work.Width - ActualWidth) / 2.0);
-            _baseTop = work.Bottom - ActualHeight - _current.Dock.OffsetFromEdge;
+            _baseLeft = work.Left + ((work.Width - winWidth) / 2.0);
+            _baseTop = work.Bottom - winHeight - _current.Dock.OffsetFromEdge;
             Left = _baseLeft;
             Top = _baseTop + _slideOffset;
         }
@@ -1685,6 +1775,12 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
                 $"layout nonce={nonce} win=({(int)origin.X},{(int)origin.Y}," +
                 $"{(int)ActualWidth},{(int)ActualHeight}) dip=({Left:F0},{Top:F0}) " +
                 $"hwnd=({rect.Left},{rect.Top},{rect.Right},{rect.Bottom}) count={_iconControls.Count} " +
+                // 尺寸链路诊断（同一条日志，避免二次 Info 调用在异常路径上丢失）：
+                // 「显示区域很窄」排查时这几层必须自洽，缺一层就能定位是哪层没长。
+                $"| w={Width:F1} h={Height:F1} root=({Root.ActualWidth:F1}x{Root.ActualHeight:F1}) " +
+                $"cap=({Capsule.ActualWidth:F1}x{Capsule.ActualHeight:F1}) " +
+                $"panel=({IconsPanel.ActualWidth:F1}x{IconsPanel.ActualHeight:F1}) " +
+                $"children={IconsPanel.Children.Count} vis={Visibility} " +
                 string.Join(' ', parts));
         }
         catch (Exception ex)
@@ -2227,7 +2323,13 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         InvalidateVisual();
     }
 
-    private void OnLoaded(object? sender, RoutedEventArgs e) => ApplyBackdrop();
+    private void OnLoaded(object? sender, RoutedEventArgs e)
+    {
+        // 首帧完成布局后再校一次尺寸：构造期 Measure 用的是"图标可能还没 Bind 完"的内容，
+        // 这里以真实布局结果为准，避免开屏瞬间窗口偏小。
+        SyncWindowSize();
+        ApplyBackdrop();
+    }
 
     private static SolidColorBrush ParseBorderBrush(string value)
     {

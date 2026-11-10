@@ -7,7 +7,6 @@
         ShowInTaskbar="False"
         Topmost="True"
         ResizeMode="NoResize"
-        SizeToContent="WidthAndHeight"
         SnapsToDevicePixels="True"
         UseLayoutRounding="True"
         Focusable="True">
