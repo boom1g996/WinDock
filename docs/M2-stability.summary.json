@@ -1,0 +1,75 @@
+{
+  "file": "docs\\M2-stability.jsonl",
+  "samples": 144,
+  "steady_samples": 139,
+  "quiet_samples": 136,
+  "spike_samples": 5,
+  "warmup_s": 300.0,
+  "interval_s": 61.0,
+  "window_hours": 2.41,
+  "started": "2026-11-10T03:18:29+00:00",
+  "ended": "2026-11-10T05:43:14+00:00",
+  "runs": [
+    {
+      "pid": 29260,
+      "samples": 144,
+      "hours": 2.41,
+      "started": "2026-11-10T03:18:29+00:00",
+      "ended": "2026-11-10T05:43:14+00:00"
+    }
+  ],
+  "host_pid_changes": 0,
+  "cpu_percent": {
+    "min": 0.0,
+    "avg": 0.2,
+    "max": 1.25
+  },
+  "cpu_5min": {
+    "min": 0.094,
+    "avg": 0.212,
+    "max": 0.573
+  },
+  "cpu_5min_windows": 135,
+  "cpu_5min_pass_ratio": 0.896,
+  "working_set_mb": {
+    "min": 12.14,
+    "avg": 79.071,
+    "max": 172.35
+  },
+  "working_set_5min": {
+    "min": 14.282,
+    "avg": 77.67,
+    "max": 164.426
+  },
+  "working_set_pass_ratio": 0.889,
+  "private_mb": {
+    "min": 148.22,
+    "avg": 155.436,
+    "max": 191.14
+  },
+  "handles": {
+    "min": 660.0,
+    "avg": 843.221,
+    "max": 1106.0
+  },
+  "gdi": {
+    "min": 26.0,
+    "avg": 28.368,
+    "max": 32.0
+  },
+  "user": {
+    "min": 40.0,
+    "avg": 42.743,
+    "max": 45.0
+  },
+  "working_set_drift_mb": -77.92,
+  "private_drift_mb": -34.15,
+  "working_set_trim_samples": 11,
+  "handle_drift": 323,
+  "gdi_drift": -6,
+  "user_drift": 1,
+  "host_dead_samples": 0,
+  "watchdog_recoveries": 0,
+  "log_errors": 0,
+  "samples_without_dock_window": 0
+}
