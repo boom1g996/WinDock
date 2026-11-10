@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using WinDock.Core;
@@ -27,9 +28,10 @@ public partial class GuideWindow : Window
         _config = config;
         _log = log;
 
-        // XAML 中 PresetClassic.IsChecked=True 会在 InitializeComponent 期间触发
-        // Checked 事件，此时后面的 PresetClear 字段还是 null；必须等构造完成再响应。
+        // XAML 中控件默认值会在 InitializeComponent 期间触发事件，
+        // 此时后续字段仍为 null；必须等构造完成再响应。
         _ready = true;
+        BuildPresetCombo();
         ApplyTexts();
         ApplyStep();
         UpdateCapsule();
@@ -53,13 +55,46 @@ public partial class GuideWindow : Window
         ModeBeautify.Content = Loc.Instance.T("Guide_Mode_Beautify");
         ModeCoexist.Content = Loc.Instance.T("Guide_Mode_Coexist");
         ModeReplace.Content = Loc.Instance.T("Guide_Mode_Replace");
-        PresetSimple.Content = Loc.Instance.T("Guide_Preset_Simple");
-        PresetClassic.Content = Loc.Instance.T("Guide_Preset_Classic");
-        PresetClear.Content = Loc.Instance.T("Guide_Preset_Clear");
 
         SkipButton.Content = Loc.Instance.T("Guide_Skip");
         BackButton.Content = Loc.Instance.T("Guide_Back");
     }
+
+    /// <summary>预设下拉与设置窗口同源（ThemePresets.Names），文本复用 Settings_Preset* 资源。</summary>
+    private void BuildPresetCombo()
+    {
+        int selected = PresetCombo.SelectedIndex;
+        PresetCombo.Items.Clear();
+        foreach (string name in ThemePresets.Names)
+        {
+            PresetCombo.Items.Add(new ComboBoxItem
+            {
+                Content = Loc.Instance.T(PresetTextKey(name)),
+                Tag = name,
+            });
+        }
+
+        PresetCombo.SelectedIndex = selected >= 0 ? selected : 1; // 默认 macOS 深色
+        PresetCombo.SelectionChanged += (_, _) =>
+        {
+            if (_ready)
+            {
+                UpdateCapsule();
+            }
+        };
+    }
+
+    private static string PresetTextKey(string preset) => preset switch
+    {
+        "macosLight" => "Settings_PresetMacosLight",
+        "macosDark" => "Settings_PresetMacosDark",
+        "mono" => "Settings_PresetMono",
+        "cyber" => "Settings_PresetCyber",
+        _ => "Settings_PresetGlass",
+    };
+
+    private string SelectedPreset =>
+        (PresetCombo.SelectedItem as ComboBoxItem)?.Tag as string ?? "macosDark";
 
     private void ApplyStep()
     {
@@ -71,25 +106,15 @@ public partial class GuideWindow : Window
         NextButton.Content = Loc.Instance.T(_step == 2 ? "Guide_Start" : "Guide_Next");
     }
 
-    private void OnPresetChanged(object sender, RoutedEventArgs e)
-    {
-        if (_ready)
-        {
-            UpdateCapsule();
-        }
-    }
-
     /// <summary>预设只改本窗口预览胶囊；真正写配置在完成的最后一次 Save。</summary>
     private void UpdateCapsule()
     {
-        byte alpha = PresetSimple?.IsChecked == true ? (byte)56
-            : PresetClear?.IsChecked == true ? (byte)40
-            : (byte)77;
-        double radius = PresetSimple?.IsChecked == true ? 16
-            : PresetClear?.IsChecked == true ? 26
-            : 22;
+        // 用一份临时配置跑真实预设，预览与最终结果必然一致（不另起一套参数）。
+        var preview = new DockConfig();
+        ThemePresets.Apply(preview, SelectedPreset);
+        byte alpha = (byte)Math.Clamp(preview.Appearance.Opacity * 255, 20, 255);
         PresetCapsule.Background = new SolidColorBrush(Color.FromArgb(alpha, 28, 30, 38));
-        PresetCapsule.CornerRadius = new CornerRadius(radius);
+        PresetCapsule.CornerRadius = new CornerRadius(preview.Dock.CornerRadius);
     }
 
     private void OnNext(object sender, RoutedEventArgs e)
@@ -126,26 +151,14 @@ public partial class GuideWindow : Window
         DockConfig config = _config.Current;
         if (applyChoices)
         {
-            // 设计决策 D1：M2 只启用模式 C；引导中不改 TaskbarMode，避免承诺未实机验证的隐藏。
-            config.General.TaskbarMode = "beautify";
-            if (PresetSimple.IsChecked == true)
-            {
-                config.Dock.IconSize = 40;
-                config.Appearance.Opacity = 0.22;
-                config.Dock.CornerRadius = 16;
-            }
-            else if (PresetClear.IsChecked == true)
-            {
-                config.Dock.IconSize = 56;
-                config.Appearance.Opacity = 0.16;
-                config.Dock.CornerRadius = 26;
-            }
-            else
-            {
-                config.Dock.IconSize = 48;
-                config.Appearance.Opacity = 0.30;
-                config.Dock.CornerRadius = 22;
-            }
+            // 5.3：第 2 步由用户选择任务栏模式。replace（隐藏原生任务栏）无官方 API，
+            // 需求 R1 要求「明确告知 + 一键恢复兜底」，因此这里如实开放但保留托盘恢复入口。
+            config.General.TaskbarMode = ModeReplace.IsChecked == true ? "replace"
+                : ModeCoexist.IsChecked == true ? "coexist"
+                : "beautify";
+
+            // 6.4 预设主题：与设置窗口同一套参数。
+            ThemePresets.Apply(config, SelectedPreset);
         }
 
         config.General.FirstRunCompleted = true;

@@ -2,7 +2,9 @@
 
 把 Windows 11 任务栏改造成 macOS Dock 风格的桌面应用：悬浮胶囊、邻域放大、运行指示点、窗口缩略图预览、首次启动引导、自动隐藏、拖拽排序、独立进程看门狗与多屏适配。
 
-> **当前阶段**：M1 MVP（WD-001~013）、**M2 八批**（WD-014~020、WD-033~039，见下方文档）、**M3 七项**（WD-021~027）与 **M4 五项**（WD-028~032）**均已实施落地**，需求文档 v1.0 的功能点已全部覆盖。第八批交付：Release 构建 0 警告 0 错误、离线自检 **58/58**、三项功能冒烟 PASS（AC-05 关闭按钮、AC-21 帧率 57.18FPS、AC-12 DPI 125% 审计）。
+> **当前阶段**：M1 MVP（WD-001~013）、**M2 八批**（WD-014~020、WD-033~039，见下方文档）、**M3 七项**（WD-021~027）与 **M4 五项**（WD-028~032）**均已实施落地**；此后又按「先补齐功能、再打磨细节」的要求做了 **两轮需求逐条复核**，把「有字段无实现 / 有章节无代码」的条目一并补齐（见 [M3-M4 变更说明 §6](docs/M3-M4-变更说明与已知问题.md)）。当前交付：Release 构建 0 警告 0 错误、离线自检 **70/70**。
+>
+> **两轮复核新增**：FR-101 倒影+底部高光、FR-102 指示样式（点/宽条/三条）、FR-203 注意跳动（`RegisterShellHookWindow` + `HSHELL_FLASH`）、FR-205 悬停浮起、FR-304 常驻窗口切换面板、FR-402「+N」、6.7 每屏一条 Dock、6.10 全量可调项、6.11 UWP AUMID 图标与低分辨率提示、6.13 模式 B 精简共存（HKCU 用户项 + 快照还原）与模式 A 托盘溢出提示、8.3 RDP/虚拟机/高对比度回退、8.4 名称常显 + AutomationPeer、10 UI 错误态与面板 14px 圆角、R2 性能模式、R5 管理员重启、R9 第三方美化工具冲突检测、5.2 气泡「一键恢复」、AC-10 恢复即退出、6.15 卸载还原脚本。
 >
 > **M3/M4 新增能力**（细节见 [M3-M4 变更说明与已知问题](docs/M3-M4-变更说明与已知问题.md)）：6.10 五套预设主题 + 强调色、6.1 背景毛玻璃（`DwmExtendFrameIntoClientArea` 整窗玻璃 + 圆角）、6.7 多显示器定位（`EnumDisplayMonitors` + Per-Monitor DPI 换算）、6.2 图标清晰度（按 DPI × 放大倍率请求位图）、6.9 托盘/设置项补全（模式切换 A/B/C 即时生效、开机自启、检查更新）、6.5 系统区（回收站/任务视图/显示桌面）、6.6 拖入添加、6.4 Jump List、6.3 最小化吸入反馈、6.8 配置导入导出、6.11 屏分辨率变化重排（`WM_DISPLAYCHANGE`）。
 >
@@ -99,7 +101,8 @@ python tools/stability_m1.py --summary --output docs/M2-stability.jsonl
 产物：`artifacts/WinDock-win-x64/`（**自包含单文件**，推荐交付）含 `DockHost.exe`（主程序）、`WinDock.Settings.exe`（设置窗口）、`WinDock.Watchdog.exe`（守护进程），**三者必须同目录**；守护进程缺失时主程序会记 WARN 并降级为关闭。自包含发布失败（离线缺 runtime packs）时脚本会自动回退生成 `artifacts/WinDock-framework-dependent/`（需 .NET 10 桌面运行时）。
 
 主程序支持：
-- `DockHost.exe --selftest`：**58 项**零依赖自检（配置 / 动画 / 调度器 / DWM 几何 / 引导 / 拖拽顺序持久化 / 看门狗协议 / 打点聚合 / 帧率统计 / 预设主题 / 配置导入导出 / 多显示器解析 / 系统区）
+- `DockHost.exe --selftest`：**70 项**零依赖自检（配置 / 动画 / 调度器 / DWM 几何 / 引导 / 拖拽顺序持久化 / 看门狗协议 / 打点聚合 / 帧率统计 / 预设主题 / 配置导入导出 / 多显示器解析 / 系统区 / 材质与兼容性回退 / 冲突检测）。退出码 `0` 全通过、`1` 有失败、`2` 断言通过但结果文件写盘失败（**必须在互斥之前执行**，否则 Dock 正在运行时会假通过）。
+- `DockHost.exe --elevate`：R5「以管理员重启」引导进程——先请旧实例优雅退出，等单实例互斥释放后再 `runas` 拉起新实例。
 - `DockHost.exe --exit`：请求已运行实例优雅退出（发看门狗 `S` 帧，不产生恢复事件）
 - `DockHost.exe --dump-layout=<nonce>`：只读布局探针，把每个图标的屏幕坐标写入 `[Layout]` 日志（供自动化精确定位；nonce 原样回写，避免读到上一次的旧行）
 
@@ -112,6 +115,8 @@ python tools/stability_m1.py --summary --output docs/M2-stability.jsonl
 ```powershell
 python tools/probe_capabilities.py
 python tools/create_github_project.py --dry-run
+# 6.15 / 4.4 卸载还原：结束进程 → 还原任务栏位置与 HKCU 精简项 → 清开机自启 → 可选删文件
+powershell -ExecutionPolicy Bypass -File tools/uninstall_windock.ps1 -InstallDir "artifacts/WinDock-win-x64"
 ```
 
 ## 状态

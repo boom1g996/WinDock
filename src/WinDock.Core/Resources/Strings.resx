@@ -66,10 +66,10 @@
   <data name="Guide_S1_Text" xml:space="preserve"><value>WinDock 会在屏幕底部显示一条 macOS 风格的悬浮 Dock，用来启动、切换和管理常用应用。当前版本不会隐藏或修改 Windows 原生任务栏，也不会改动系统文件；随时可以从托盘图标退出。</value></data>
   <data name="Guide_S2_Title" xml:space="preserve"><value>选择任务栏共存方式</value></data>
   <data name="Guide_S2_Text" xml:space="preserve"><value>共有三种思路。本版本默认、且仅启用「仅美化」，兼容性最好。</value></data>
-  <data name="Guide_S2_Hint" xml:space="preserve"><value>其余两种模式需要实机隐藏或移动原生任务栏，当前版本未实机验证，暂不开放，留待后续里程碑评估。</value></data>
+  <data name="Guide_S2_Hint" xml:space="preserve"><value>「替换」模式通过隐藏原生任务栏腾出空间，系统没有公开 API，个别系统版本可能失效；随时可在托盘菜单选「恢复原生任务栏」一键还原，异常退出时看门狗也会自动恢复。</value></data>
   <data name="Guide_Mode_Beautify" xml:space="preserve"><value>仅美化（推荐）：保留原生任务栏，额外显示悬浮 Dock</value></data>
-  <data name="Guide_Mode_Coexist" xml:space="preserve"><value>共存：原生任务栏与 Dock 同时可见（当前版本未启用）</value></data>
-  <data name="Guide_Mode_Replace" xml:space="preserve"><value>替换：隐藏原生任务栏（当前版本未启用）</value></data>
+  <data name="Guide_Mode_Coexist" xml:space="preserve"><value>共存：原生任务栏保留，但隐藏其中的搜索框/任务视图/小组件，只留托盘区</value></data>
+  <data name="Guide_Mode_Replace" xml:space="preserve"><value>替换：隐藏原生任务栏（实验性，可一键恢复）</value></data>
   <data name="Guide_S3_Title" xml:space="preserve"><value>挑一个初始外观</value></data>
   <data name="Guide_S3_Text" xml:space="preserve"><value>之后可以在设置里随时调整图标尺寸、圆角、透明度与放大倍率，改动即时生效。</value></data>
   <data name="Guide_Preset_Simple" xml:space="preserve"><value>简约</value></data>
@@ -153,4 +153,178 @@
   <data name="Menu_OpenFolder" xml:space="preserve"><value>打开文件夹</value></data>
   <data name="Error_FolderNotFound" xml:space="preserve"><value>文件夹不存在或不可访问。</value></data>
   <data name="Menu_JumpList" xml:space="preserve"><value>最近/常用</value></data>
+  <data name="Error_PathMissing" xml:space="preserve">
+    <value>路径已失效（配置已保留，可右键移除）</value>
+  </data>
+  <data name="Error_IconMissing" xml:space="preserve">
+    <value>未能提取图标，已使用问号占位</value>
+  </data>
+  <data name="Error_IconLowRes" xml:space="preserve">
+    <value>源图标仅 {0}px，放大会略糊（未做插值放大）</value>
+  </data>
+  <data name="Preview_MoreWindows" xml:space="preserve">
+    <value>另有 {0} 个窗口</value>
+  </data>
+  <data name="Dock_QuestionIcon" xml:space="preserve">
+    <value>?</value>
+  </data>
+  <data name="Settings_ValueMs" xml:space="preserve">
+    <value>{0} ms</value>
+  </data>
+  <data name="Settings_BackgroundMode" xml:space="preserve">
+    <value>背景模式</value>
+  </data>
+  <data name="Settings_BgNone" xml:space="preserve">
+    <value>无（仅图标）</value>
+  </data>
+  <data name="Settings_BgSolid" xml:space="preserve">
+    <value>纯色</value>
+  </data>
+  <data name="Settings_BgAcrylic" xml:space="preserve">
+    <value>Acrylic 毛玻璃</value>
+  </data>
+  <data name="Settings_BgMica" xml:space="preserve">
+    <value>Mica 云母</value>
+  </data>
+  <data name="Settings_BgImage" xml:space="preserve">
+    <value>自定义图片（暂按毛玻璃渲染）</value>
+  </data>
+  <data name="Settings_BorderColor" xml:space="preserve">
+    <value>边框颜色（#AARRGGBB）</value>
+  </data>
+  <data name="Settings_BorderWidth" xml:space="preserve">
+    <value>边框宽度</value>
+  </data>
+  <data name="Settings_ReflectionHeight" xml:space="preserve">
+    <value>倒影高度</value>
+  </data>
+  <data name="Settings_AnimationSpeed" xml:space="preserve">
+    <value>动效速度</value>
+  </data>
+  <data name="Settings_Decay" xml:space="preserve">
+    <value>衰减曲线</value>
+  </data>
+  <data name="Settings_DecayCosine" xml:space="preserve">
+    <value>余弦</value>
+  </data>
+  <data name="Settings_DecayGaussian" xml:space="preserve">
+    <value>高斯</value>
+  </data>
+  <data name="Settings_DecayLinear" xml:space="preserve">
+    <value>线性</value>
+  </data>
+  <data name="Settings_ReduceMotion" xml:space="preserve">
+    <value>跟随系统「减少动态效果」</value>
+  </data>
+  <data name="Settings_AutoHide" xml:space="preserve">
+    <value>自动隐藏</value>
+  </data>
+  <data name="Settings_HideDelay" xml:space="preserve">
+    <value>隐藏延迟</value>
+  </data>
+  <data name="Settings_ClickActiveApp" xml:space="preserve">
+    <value>点击已激活应用时</value>
+  </data>
+  <data name="Settings_ClickShowWindows" xml:space="preserve">
+    <value>显示窗口面板</value>
+  </data>
+  <data name="Settings_ClickMinimize" xml:space="preserve">
+    <value>最小化</value>
+  </data>
+  <data name="Settings_ClickNone" xml:space="preserve">
+    <value>无操作</value>
+  </data>
+  <data name="Settings_RunningSort" xml:space="preserve">
+    <value>运行区排序</value>
+  </data>
+  <data name="Settings_SortRecent" xml:space="preserve">
+    <value>最近使用</value>
+  </data>
+  <data name="Settings_SortLaunch" xml:space="preserve">
+    <value>启动时间</value>
+  </data>
+  <data name="Settings_SortManual" xml:space="preserve">
+    <value>手动（首次出现顺序）</value>
+  </data>
+  <data name="Settings_IndicatorStyle" xml:space="preserve">
+    <value>运行指示样式</value>
+  </data>
+  <data name="Settings_IndicatorDot" xml:space="preserve">
+    <value>单点</value>
+  </data>
+  <data name="Settings_IndicatorWide" xml:space="preserve">
+    <value>宽点</value>
+  </data>
+  <data name="Settings_IndicatorTriple" xml:space="preserve">
+    <value>三点</value>
+  </data>
+  <data name="Settings_IconLabelMode" xml:space="preserve">
+    <value>图标名称</value>
+  </data>
+  <data name="Settings_LabelTooltip" xml:space="preserve">
+    <value>悬停提示</value>
+  </data>
+  <data name="Settings_LabelAlways" xml:space="preserve">
+    <value>常显</value>
+  </data>
+  <data name="Settings_LabelNever" xml:space="preserve">
+    <value>不显示</value>
+  </data>
+  <data name="Settings_Hotkey" xml:space="preserve">
+    <value>显示/隐藏快捷键</value>
+  </data>
+  <data name="Settings_TrayIcon" xml:space="preserve">
+    <value>显示托盘图标</value>
+  </data>
+  <data name="Settings_AttentionBounce" xml:space="preserve">
+    <value>应用请求注意时图标跳动</value>
+  </data>
+  <data name="Settings_Monitor" xml:space="preserve">
+    <value>显示在哪个屏幕</value>
+  </data>
+  <data name="Settings_MonitorPrimary" xml:space="preserve">
+    <value>主屏</value>
+  </data>
+  <data name="Settings_MonitorN" xml:space="preserve">
+    <value>副屏（{0}×{1}）</value>
+  </data>
+  <data name="Settings_PerMonitorDocks" xml:space="preserve">
+    <value>每块屏幕都显示一条 Dock（副屏常驻）</value>
+  </data>
+  <data name="Settings_PerformanceMode" xml:space="preserve">
+    <value>性能模式（关闭倒影、模糊与缩略图实时刷新）</value>
+  </data>
+  <data name="Settings_PerformanceHint" xml:space="preserve">
+    <value>低端机或集显掉帧时开启：Dock 改用不透明纯色底，预览面板只显示标题。</value>
+  </data>
+  <data name="Settings_RestartElevated" xml:space="preserve">
+    <value>以管理员重启 Dock</value>
+  </data>
+  <data name="Settings_AdminHint" xml:space="preserve">
+    <value>以管理员运行的应用无法被普通权限的 Dock 操作（系统 UIPI 限制，本版本不做绕过）。需要操作这类应用时，请用上方按钮以管理员权限重启 Dock。</value>
+  </data>
+  <data name="Settings_ConflictNone" xml:space="preserve">
+    <value>未检测到会与 Dock 冲突的第三方任务栏美化工具。</value>
+  </data>
+  <data name="Settings_ConflictFound" xml:space="preserve">
+    <value>检测到可能冲突的第三方美化工具：{0}。两者同时接管任务栏时可能出现位置错乱或闪烁。</value>
+  </data>
+  <data name="Settings_HostMissing" xml:space="preserve">
+    <value>未找到 DockHost.exe，请确认安装目录完整。</value>
+  </data>
+  <data name="Tray_RestartElevated" xml:space="preserve">
+    <value>以管理员重启 Dock</value>
+  </data>
+  <data name="Tray_ConflictTitle" xml:space="preserve">
+    <value>检测到第三方任务栏工具</value>
+  </data>
+  <data name="Tray_ConflictText" xml:space="preserve">
+    <value>发现 {0}，可能与 Dock 争抢任务栏，如显示异常请先关闭它。</value>
+  </data>
+  <data name="Tray_OverflowTitle" xml:space="preserve">
+    <value>系统托盘需要原生任务栏</value>
+  </data>
+  <data name="Tray_OverflowText" xml:space="preserve">
+    <value>当前是「完全替换」模式，原生任务栏已隐藏，系统托盘的图标无处显示。点击此处切换到「精简共存」：保留任务栏托盘区，其余交给 Dock。</value>
+  </data>
 </root>

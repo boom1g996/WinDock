@@ -11,17 +11,32 @@
             </TransformGroup>
         </Grid.RenderTransform>
         <Border x:Name="IconFrame" CornerRadius="8" Background="#14FFFFFF" ClipToBounds="True">
-            <Image x:Name="IconImage" Stretch="Uniform"
-                   RenderOptions.BitmapScalingMode="HighQuality" Margin="2" />
+            <Grid>
+                <Image x:Name="IconImage" Stretch="Uniform"
+                       RenderOptions.BitmapScalingMode="HighQuality" Margin="2" />
+                <!-- FR-205 悬停 +4% 亮度：白色叠加层，由 hover 动画驱动透明度 -->
+                <Border x:Name="HoverGlow" Background="White" Opacity="0" IsHitTestVisible="False" />
+                <!-- 8.4 名称常显（labelMode=always 时显示在图标内底部） -->
+                <Border x:Name="LabelHost" VerticalAlignment="Bottom" Background="#99000000"
+                        Visibility="Collapsed" IsHitTestVisible="False">
+                    <TextBlock x:Name="Label" FontSize="9" Foreground="#FFF2F4F8"
+                               TextTrimming="CharacterEllipsis" TextAlignment="Center"
+                               Margin="2,1,2,1" MaxHeight="14" />
+                </Border>
+            </Grid>
         </Border>
-        <Ellipse x:Name="Indicator" Width="4" Height="4" Fill="#FFF2F4F8"
-                 HorizontalAlignment="Center" VerticalAlignment="Bottom"
-                 Margin="0,0,0,-8" Visibility="Collapsed"
-                 RenderTransformOrigin="0.5,0.5">
-            <!-- FR-204：指示点 150ms 淡入 + 从 0 放大到 1，数值由 AnimationEngine 统一给出 -->
-            <Ellipse.RenderTransform>
+        <!-- 10 UI 规范：错误态图标上角红点，hover 由 ToolTip 说明原因 -->
+        <Ellipse x:Name="ErrorDot" Width="8" Height="8" Fill="#FFE81123"
+                 HorizontalAlignment="Right" VerticalAlignment="Top"
+                 Margin="0,-1,-1,0" Visibility="Collapsed" IsHitTestVisible="False"
+                 Stroke="#FF000000" StrokeThickness="1" />
+        <!-- FR-102 / FR-204：运行指示点，样式与淡入缩放由代码/动画引擎驱动 -->
+        <StackPanel x:Name="Indicator" Orientation="Horizontal"
+                    HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                    Margin="0,0,0,-8" Visibility="Collapsed" RenderTransformOrigin="0.5,0.5">
+            <StackPanel.RenderTransform>
                 <ScaleTransform x:Name="IndicatorScale" ScaleX="1" ScaleY="1" />
-            </Ellipse.RenderTransform>
-        </Ellipse>
+            </StackPanel.RenderTransform>
+        </StackPanel>
     </Grid>
 </UserControl>

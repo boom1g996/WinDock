@@ -46,8 +46,18 @@ public sealed class IconService : IIconService
 
         if (item.Type == "uwp")
         {
-            // UWP AUMID → Package Logo 属 M3 适配范围，M1 明确降级为问号图标
-            _log.Info(Module, $"UWP 固定项暂用占位图标：{item.Aumid}");
+            // 6.11：UWP 通过 AUMID 解析为 shell 命名空间项（shell:AppsFolder\<AUMID>），
+            // 由 shell 自己给出磁贴图标；解析失败仍回退问号占位（明确降级，不假装成功）。
+            if (!string.IsNullOrWhiteSpace(item.Aumid))
+            {
+                ImageSource? uwp = GetUwpIcon(item.Aumid, size);
+                if (uwp is not null)
+                {
+                    return uwp;
+                }
+            }
+
+            _log.Warn(Module, $"UWP 图标解析失败，使用占位图标：{item.Aumid}");
             return QuestionMark(size);
         }
 
@@ -115,6 +125,72 @@ public sealed class IconService : IIconService
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// UWP 图标：把 "shell:AppsFolder\&lt;AUMID&gt;" 解析成 PIDL 后交给 SHGetFileInfo。
+    /// shell 会返回该应用的磁贴图标（32px 档），高 DPI 下略糊，属已知限制。
+    /// </summary>
+    private ImageSource? GetUwpIcon(string aumid, int size)
+    {
+        string key = $"uwp:{aumid}:{size}";
+        lock (_cache)
+        {
+            if (_cache.TryGetValue(key, out ImageSource? cached))
+            {
+                return cached;
+            }
+        }
+
+        string parseName = aumid.StartsWith("shell:", StringComparison.OrdinalIgnoreCase)
+            ? aumid
+            : "shell:AppsFolder\\" + aumid;
+        IntPtr pidl = IntPtr.Zero;
+        try
+        {
+            if (SHParseDisplayName(parseName, IntPtr.Zero, out pidl, 0, out _) != 0
+                || pidl == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            SHFILEINFO info = default;
+            uint infoSize = (uint)Marshal.SizeOf<SHFILEINFO>();
+            if (SHGetFileInfo(pidl.ToString(), 0, ref info, infoSize,
+                    SHGFI_ICON | SHGFI_PIDL | SHGFI_LARGEICON) == IntPtr.Zero
+                || info.hIcon == IntPtr.Zero)
+            {
+                return null;
+            }
+
+            try
+            {
+                ImageSource image = FromHIcon(info.hIcon);
+                lock (_cache)
+                {
+                    _cache[key] = image;
+                }
+
+                return image;
+            }
+            finally
+            {
+                DestroyIcon(info.hIcon);
+            }
+        }
+        catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException
+                                       or System.ComponentModel.Win32Exception)
+        {
+            _log.Warn(Module, $"UWP 图标解析异常：{ex.Message}");
+            return null;
+        }
+        finally
+        {
+            if (pidl != IntPtr.Zero)
+            {
+                ILFree(pidl);
+            }
+        }
     }
 
     public void Invalidate(string path)

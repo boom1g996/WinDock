@@ -47,6 +47,12 @@ public sealed class DockItem
 
     /// <summary>用于图标提取的目标路径。</summary>
     public string TargetPath => Pinned?.Path ?? Group?.ExecutablePath ?? "";
+
+    /// <summary>
+    /// 错误原因（10 UI 规范错误态）：路径失效 / 图标源过小等，非空时图标右上角显示红点，
+    /// hover 的 ToolTip 给出原因。配置项本身保留，不自动删除（需求第 9 章约束）。
+    /// </summary>
+    public string? Error { get; set; }
 }
 
 /// <summary>任务栏边缘位置（M0 实测本机为 Top，禁止硬编码 Bottom）。</summary>

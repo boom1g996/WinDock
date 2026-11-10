@@ -42,9 +42,9 @@
                                Margin="0,0,0,14" />
                     <RadioButton x:Name="ModeBeautify" IsChecked="True" Margin="0,7"
                                  GroupName="TaskbarMode" />
-                    <RadioButton x:Name="ModeCoexist" Margin="0,7" IsEnabled="False"
+                    <RadioButton x:Name="ModeCoexist" Margin="0,7"
                                  GroupName="TaskbarMode" />
-                    <RadioButton x:Name="ModeReplace" Margin="0,7" IsEnabled="False"
+                    <RadioButton x:Name="ModeReplace" Margin="0,7"
                                  GroupName="TaskbarMode" />
                     <TextBlock x:Name="S2Hint" TextWrapping="Wrap" Opacity="0.6"
                                Margin="0,14,0,0" FontSize="12" />
@@ -55,14 +55,8 @@
                                Margin="0,0,0,10" />
                     <TextBlock x:Name="S3Text" TextWrapping="Wrap" Opacity="0.75"
                                Margin="0,0,0,12" />
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                        <RadioButton x:Name="PresetSimple" Margin="0,0,18,0"
-                                     GroupName="Preset" Checked="OnPresetChanged" />
-                        <RadioButton x:Name="PresetClassic" Margin="0,0,18,0"
-                                     IsChecked="True" GroupName="Preset" Checked="OnPresetChanged" />
-                        <RadioButton x:Name="PresetClear" GroupName="Preset"
-                                     Checked="OnPresetChanged" />
-                    </StackPanel>
+                    <!-- 6.4 预设主题（P1）：与设置窗口共用同一套 ThemePresets，避免两处口径不一致 -->
+                    <ComboBox x:Name="PresetCombo" Margin="0,0,0,16" />
                     <Border x:Name="PresetCapsule" HorizontalAlignment="Center"
                             CornerRadius="20" Padding="14" MinWidth="240"
                             BorderBrush="#33FFFFFF" BorderThickness="1">

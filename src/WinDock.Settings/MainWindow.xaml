@@ -64,6 +64,11 @@
                                 TickFrequency="1" IsSnapToTickEnabled="True" />
                     </StackPanel>
                     <StackPanel Margin="0,6">
+                        <TextBlock x:Name="MonitorLabel" Margin="0,0,0,4" />
+                        <ComboBox x:Name="MonitorCombo" />
+                        <CheckBox x:Name="PerMonitorCheckBox" Margin="0,6,0,2" />
+                    </StackPanel>
+                    <StackPanel Margin="0,6">
                         <DockPanel>
                             <TextBlock x:Name="OffsetLabel" />
                             <TextBlock x:Name="OffsetValue" DockPanel.Dock="Right" HorizontalAlignment="Right" />
@@ -77,6 +82,22 @@
             <!-- 材质与外观 -->
             <GroupBox x:Name="MaterialGroup" Padding="10" Margin="0,0,0,12">
                 <StackPanel>
+                    <StackPanel Margin="0,6">
+                        <TextBlock x:Name="BackgroundModeLabel" Margin="0,0,0,4" />
+                        <ComboBox x:Name="BackgroundModeCombo" />
+                    </StackPanel>
+                    <StackPanel Margin="0,6">
+                        <TextBlock x:Name="BorderColorLabel" Margin="0,0,0,4" />
+                        <TextBox x:Name="BorderColorBox" />
+                    </StackPanel>
+                    <StackPanel Margin="0,6">
+                        <DockPanel>
+                            <TextBlock x:Name="BorderWidthLabel" />
+                            <TextBlock x:Name="BorderWidthValue" DockPanel.Dock="Right" HorizontalAlignment="Right" />
+                        </DockPanel>
+                        <Slider x:Name="BorderWidthSlider" Minimum="0" Maximum="4"
+                                TickFrequency="0.5" IsSnapToTickEnabled="True" />
+                    </StackPanel>
                     <StackPanel Margin="0,6">
                         <DockPanel>
                             <TextBlock x:Name="OpacityLabel" />
@@ -106,6 +127,14 @@
                         <Slider x:Name="ReflectionStrengthSlider" Minimum="0" Maximum="100"
                                 TickFrequency="1" IsSnapToTickEnabled="True" />
                     </StackPanel>
+                    <StackPanel Margin="0,2">
+                        <DockPanel>
+                            <TextBlock x:Name="ReflectionHeightLabel" />
+                            <TextBlock x:Name="ReflectionHeightValue" DockPanel.Dock="Right" HorizontalAlignment="Right" />
+                        </DockPanel>
+                        <Slider x:Name="ReflectionHeightSlider" Minimum="0" Maximum="64"
+                                TickFrequency="1" IsSnapToTickEnabled="True" />
+                    </StackPanel>
                     <StackPanel Margin="0,8,0,0">
                         <DockPanel>
                             <TextBlock x:Name="MagnifyLabel" />
@@ -114,6 +143,22 @@
                         <Slider x:Name="MagnifySlider" Minimum="1" Maximum="2.5"
                                 TickFrequency="0.05" IsSnapToTickEnabled="True" />
                     </StackPanel>
+                    <StackPanel Margin="0,8,0,0">
+                        <DockPanel>
+                            <TextBlock x:Name="SpeedLabel" />
+                            <TextBlock x:Name="SpeedValue" DockPanel.Dock="Right" HorizontalAlignment="Right" />
+                        </DockPanel>
+                        <Slider x:Name="SpeedSlider" Minimum="0.5" Maximum="2"
+                                TickFrequency="0.05" IsSnapToTickEnabled="True" />
+                    </StackPanel>
+                    <StackPanel Margin="0,6">
+                        <TextBlock x:Name="DecayLabel" Margin="0,0,0,4" />
+                        <ComboBox x:Name="DecayCombo" />
+                    </StackPanel>
+                    <CheckBox x:Name="ReducedMotionCheckBox" Margin="0,8,0,2" />
+                    <CheckBox x:Name="PerformanceCheckBox" Margin="0,6,0,2" />
+                    <TextBlock x:Name="PerformanceHint" Opacity="0.65" FontSize="11"
+                               TextWrapping="Wrap" Margin="0,0,0,4" />
                 </StackPanel>
             </GroupBox>
 
@@ -135,6 +180,37 @@
                     <CheckBox x:Name="RecycleBinCheckBox" Margin="16,2,0,2" />
                     <CheckBox x:Name="TaskViewCheckBox" Margin="16,2,0,2" />
                     <CheckBox x:Name="ShowDesktopCheckBox" Margin="16,2,0,2" />
+                    <CheckBox x:Name="AutoHideCheckBox" Margin="0,8,0,4" />
+                    <StackPanel Margin="0,2">
+                        <DockPanel>
+                            <TextBlock x:Name="HideDelayLabel" />
+                            <TextBlock x:Name="HideDelayValue" DockPanel.Dock="Right" HorizontalAlignment="Right" />
+                        </DockPanel>
+                        <Slider x:Name="HideDelaySlider" Minimum="0" Maximum="5000"
+                                TickFrequency="100" IsSnapToTickEnabled="True" />
+                    </StackPanel>
+                    <StackPanel Margin="0,6">
+                        <TextBlock x:Name="ClickActiveLabel" Margin="0,0,0,4" />
+                        <ComboBox x:Name="ClickActiveCombo" />
+                    </StackPanel>
+                    <StackPanel Margin="0,6">
+                        <TextBlock x:Name="RunningSortLabel" Margin="0,0,0,4" />
+                        <ComboBox x:Name="RunningSortCombo" />
+                    </StackPanel>
+                    <StackPanel Margin="0,6">
+                        <TextBlock x:Name="IndicatorStyleLabel" Margin="0,0,0,4" />
+                        <ComboBox x:Name="IndicatorStyleCombo" />
+                    </StackPanel>
+                    <StackPanel Margin="0,6">
+                        <TextBlock x:Name="IconLabelModeLabel" Margin="0,0,0,4" />
+                        <ComboBox x:Name="IconLabelModeCombo" />
+                    </StackPanel>
+                    <StackPanel Margin="0,6">
+                        <TextBlock x:Name="HotkeyLabel" Margin="0,0,0,4" />
+                        <ComboBox x:Name="HotkeyCombo" />
+                    </StackPanel>
+                    <CheckBox x:Name="TrayIconCheckBox" Margin="0,8,0,4" />
+                    <CheckBox x:Name="AttentionBounceCheckBox" Margin="0,4" />
                     <Button x:Name="GuideButton" HorizontalAlignment="Left"
                             Margin="0,10,0,4" Padding="10,4" />
                 </StackPanel>
@@ -147,7 +223,12 @@
                         <Button x:Name="ExportButton" Margin="0,0,8,8" Padding="10,5" />
                         <Button x:Name="ImportButton" Margin="0,0,8,8" Padding="10,5" />
                         <Button x:Name="UpdateButton" Margin="0,0,8,8" Padding="10,5" />
+                        <Button x:Name="ElevateButton" Margin="0,0,8,8" Padding="10,5" />
                     </WrapPanel>
+                    <TextBlock x:Name="AdminHint" Opacity="0.65" FontSize="11"
+                               TextWrapping="Wrap" Margin="0,2,0,4" />
+                    <TextBlock x:Name="ConflictText" Opacity="0.65" FontSize="11"
+                               TextWrapping="Wrap" Margin="0,0,0,4" />
                 </StackPanel>
             </GroupBox>
 

@@ -16,6 +16,8 @@ public static partial class NativeMethods
 
     public const uint MOD_ALT = 0x0001;
     public const uint MOD_CONTROL = 0x0002;
+    public const uint MOD_SHIFT = 0x0004;
+    public const uint MOD_WIN = 0x0008;
     public const uint MOD_NOREPEAT = 0x4000;
     public const uint WM_HOTKEY = 0x0312;
 
@@ -164,6 +166,10 @@ public static partial class NativeMethods
     public const uint NIF_TIP = 0x00000004;
     public const uint NIF_INFO = 0x00000010;
     public const uint NIIF_WARNING = 0x00000003;
+
+    // 气泡交互回执（5.2 崩溃恢复「一键恢复」：用户点击气泡时补做恢复动作）
+    public const uint NIN_BALLOONUSERCLICK = 0x0405;
+    public const uint NIN_BALLOONTIMEOUT = 0x0404;
 
     public const uint WM_DESTROY = 0x0002;
     public const uint WM_RBUTTONUP = 0x0205;

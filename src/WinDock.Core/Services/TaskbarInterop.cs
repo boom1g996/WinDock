@@ -20,8 +20,21 @@ public sealed class TaskbarInterop : ITaskbarInterop
     private const string TrayClass = "Shell_TrayWnd";
     private const string SecondaryTrayClass = "Shell_SecondaryTrayWnd";
 
+    private const string SearchKey = @"Software\Microsoft\Windows\CurrentVersion\Search";
+    private const string AdvancedKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced";
+
+    /// <summary>模式 B（精简共存）要关掉的任务栏元素：搜索框 / 任务视图 / 小组件 / 聊天。</summary>
+    private static readonly (string Key, string Name)[] CompactValues =
+    {
+        (SearchKey, "SearchboxTaskbarMode"),
+        (AdvancedKey, "ShowTaskViewButton"),
+        (AdvancedKey, "TaskbarDa"),
+        (AdvancedKey, "TaskbarMn"),
+    };
+
     private readonly ILogService _log;
     private readonly string _snapshotPath;
+    private readonly string _compactSnapshotPath;
     private TaskbarSnapshot? _snapshot;
     private int _hideDx;
     private int _hideDy;
@@ -35,6 +48,7 @@ public sealed class TaskbarInterop : ITaskbarInterop
             "WinDock");
         Directory.CreateDirectory(directory);
         _snapshotPath = Path.Combine(directory, "taskbar-snapshot.json");
+        _compactSnapshotPath = Path.Combine(directory, "taskbar-compact.json");
     }
 
     public uint TaskbarCreatedMessage { get; }
@@ -174,6 +188,86 @@ public sealed class TaskbarInterop : ITaskbarInterop
     {
         _log.Info(Module, "收到 TaskbarCreated（Explorer 重启）");
         TaskbarRecreated?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// 6.13 模式 B「精简共存」：原生任务栏只保留托盘区——把搜索框、任务视图、小组件、聊天
+    /// 图标通过 HKCU 用户设置关掉（只动当前用户，不改系统项，需求 4.4）。
+    /// 关闭时按快照原样写回，**首次开启前的旧值会被持久化**，进程崩溃也能在下次启动还原。
+    /// </summary>
+    public bool ApplyCompactMode(bool enabled)
+    {
+        try
+        {
+            if (enabled)
+            {
+                if (File.Exists(_compactSnapshotPath))
+                {
+                    return true; // 已处于精简态，不覆盖快照（否则会把 0 当成"旧值"存起来）
+                }
+
+                var previous = new Dictionary<string, int>();
+                foreach ((string key, string name) in CompactValues)
+                {
+                    int? old = ReadDword(key, name);
+                    if (old.HasValue)
+                    {
+                        previous[$"{key}|{name}"] = old.Value;
+                    }
+                }
+
+                File.WriteAllText(_compactSnapshotPath, JsonSerializer.Serialize(previous));
+                foreach ((string key, string name) in CompactValues)
+                {
+                    int error = WriteDword(key, name, 0);
+                    if (error != 0)
+                    {
+                        _log.Warn(Module, $"精简共存：写入 {name} 失败 Win32Error={error}");
+                    }
+                }
+
+                BroadcastTraySettings();
+                _log.Info(Module, "任务栏模式=精简共存：已隐藏搜索/任务视图/小组件/聊天");
+                return true;
+            }
+
+            if (!File.Exists(_compactSnapshotPath))
+            {
+                return true;
+            }
+
+            Dictionary<string, int>? snapshot = null;
+            try
+            {
+                snapshot = JsonSerializer.Deserialize<Dictionary<string, int>>(
+                    File.ReadAllText(_compactSnapshotPath));
+            }
+            catch (JsonException ex)
+            {
+                _log.Error(Module, "精简共存快照损坏，按默认值还原", ex);
+            }
+
+            foreach ((string key, string name) in CompactValues)
+            {
+                int restore = snapshot is not null && snapshot.TryGetValue($"{key}|{name}", out int value)
+                    ? value
+                    : -1; // 快照里没有记录 = 原来不存在该值
+                if (restore >= 0)
+                {
+                    WriteDword(key, name, restore);
+                }
+            }
+
+            File.Delete(_compactSnapshotPath);
+            BroadcastTraySettings();
+            _log.Info(Module, "已还原原生任务栏的搜索/任务视图/小组件设置");
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _log.Error(Module, "应用精简共存失败", ex);
+            return false;
+        }
     }
 
     public void Dispose()

@@ -151,8 +151,8 @@ public sealed class AnimationEngine : IAnimationEngine
             return;
         }
 
-        // FR-203：全局 Flash 通知无可靠 WinEvent（M2 预研 0 事件），
-        // 因此仅暴露应用内触发 API；一次 200ms 小幅跳动。
+        // FR-203：由 ShellHook 的 HSHELL_FLASH（MainWindow 注册 RegisterShellHookWindow）
+        // 触发；一次 200ms 小幅跳动（原始高度 20%）。
         _bounceIndex = index;
         _bounceStartUtc = DateTime.UtcNow;
         _bounceHeight = Math.Max(1, iconHeight) * 0.2;

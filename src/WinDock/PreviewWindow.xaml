@@ -16,7 +16,7 @@
     <!-- WD-014 / FR-401~404：DWM 缩略图直接绘制在本窗口 HWND 上，
          所以窗口必须是普通（非 layered）窗口；标题放在缩略图矩形之外，
          避免被 DWM 合成层覆盖。 -->
-    <Border Padding="10" BorderBrush="#33FFFFFF" BorderThickness="1" CornerRadius="10">
+    <Border Padding="10" BorderBrush="#33FFFFFF" BorderThickness="1" CornerRadius="14">
         <StackPanel>
             <TextBlock x:Name="HeaderText" FontWeight="SemiBold" Margin="2,0,2,8"
                        Opacity="0.85" />

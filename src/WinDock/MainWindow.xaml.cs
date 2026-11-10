@@ -64,6 +64,19 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     private DockConfig? _pendingConfig; // 拖拽期间到达的配置热更新，落点后再应用
     private PreviewWindow? _previewWindow;
     private string? _previewGroupKey;
+
+    /// <summary>FR-304：由「点击已激活应用」打开的切换面板为常驻面板，鼠标移开不自动关闭。</summary>
+    private bool _previewPinned;
+
+    /// <summary>behavior.runningSort=manual 时的首次出现顺序（进程存活期间稳定）。</summary>
+    private readonly Dictionary<string, int> _manualOrder = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>behavior.runningSort=launchTime 用的进程启动时间缓存（避免每帧查进程）。</summary>
+    private readonly Dictionary<string, DateTime> _launchTimes = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>FR-203：ShellHook 消息与事件号（应用请求注意时 shell 广播 HSHELL_FLASH）。</summary>
+    private readonly uint _shellHookMessage = NativeMethods.RegisterWindowMessage("SHELLHOOK");
+    private bool _shellHookRegistered;
     private double _baseTop;
     private double _baseLeft;
     private double _slideOffset;
@@ -74,10 +87,21 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     private IntPtr _minimizeHook;
     private NativeMethods.WinEventProc? _minimizeProc;
 
+    // 6.10 材质组 / FR-101：当前实际生效的材质分支与强调色（供图标控件复用）。
+    private readonly string? _monitorOverride;
+    private Color _accentColor = Color.FromRgb(0x0A, 0x84, 0xFF);
+    private string _materialMode = "acrylic";
+    private double _tintAlpha = 0.3;
+
+    /// <param name="monitorOverride">
+    /// 6.7 多显示器：副屏 Dock 传该屏的 monitor id（"1"/"2"…）；
+    /// null 表示跟随配置 Dock.MonitorIds[0]。
+    /// </param>
     public MainWindow(IConfigService config, ILogService log, ITaskbarInterop taskbar,
         IWindowEnumerator enumerator, IIconService icons, IAnimationEngine animation,
-        IAppLauncher launcher, IMetricsService? metrics = null)
+        IAppLauncher launcher, IMetricsService? metrics = null, string? monitorOverride = null)
     {
+        _monitorOverride = monitorOverride;
         InitializeComponent();
         _config = config;
         _log = log;
@@ -102,8 +126,20 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         KeyDown += OnWindowKeyDown;
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
+        // 倒影需要按图标区实际尺寸重建 Viewbox，尺寸变化时同步（FR-101）。
+        Capsule.SizeChanged += (_, _) => UpdateReflection(_current.Appearance.Reflection);
 
         ApplyConfig(_current);
+    }
+
+    /// <summary>
+    /// 副屏 Dock 的退出路径：先注销预览缩略图再关窗，避免共享 IPreviewService 里留下悬空句柄。
+    /// </summary>
+    public void CloseForShutdown()
+    {
+        ClosePreview();
+        _animation.Frame -= OnAnimationFrame;
+        Close();
     }
 
     /// <summary>Dock 是否被用户手动隐藏（区别于窗口 Visibility）。</summary>
@@ -335,15 +371,8 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         _drag?.Cancel(); // 非拖拽态的热更新：确保没有残留手势
         _current = config;
 
-        // 背景由 DWM 整窗毛玻璃提供（ApplyGlass）：WPF 胶囊一律透明，避免盖住玻璃层。
-        Capsule.Background = Brushes.Transparent;
-
-        Capsule.BorderBrush = ParseBorderBrush(config.Appearance.BorderColor);
-        Capsule.BorderThickness = new Thickness(config.Appearance.BorderWidth);
-        Capsule.CornerRadius = new CornerRadius(config.Dock.CornerRadius);
-        Capsule.Padding = new Thickness(
-            config.Dock.Padding, config.Dock.Padding,
-            config.Dock.Padding, config.Dock.Padding + 8);
+        // 6.10 材质组：背景模式 / 模糊强度 / 边框 / 阴影 / 倒影 / 强调色统一在此应用。
+        ApplyMaterial(config.Appearance, config.Dock);
 
         double grow = config.Dock.IconSize * (config.Animation.MagnifyScale - 1);
         bool vertical = IsVertical;
@@ -382,7 +411,7 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         // 不强制清空重建——否则配置热重载风暴会把整条 Dock 反复清空并卡死主线程。
         RebuildIcons();
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(Position));
-        ApplyGlass();
+        ApplyBackdrop();
     }
 
     /// <summary>窗口枚举事件 / 配置变更后的重建入口（UI 线程安全）。</summary>
@@ -477,20 +506,22 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             string name = !string.IsNullOrWhiteSpace(pinned.Name)
                 ? pinned.Name
                 : group?.DisplayName ?? Path.GetFileNameWithoutExtension(pinned.Path);
+            ImageSource? icon = _icons.GetIcon(pinned, iconPx)
+                                ?? (pinned.Type == "folder" ? CreateSystemGlyph("folder") : null);
             items.Add(new DockItem
             {
                 Key = pinned.Id,
                 DisplayName = name,
                 Pinned = pinned,
                 Group = group,
-                Icon = _icons.GetIcon(pinned, iconPx)
-                       ?? (pinned.Type == "folder" ? CreateSystemGlyph("folder") : null),
+                Icon = icon,
+                // 10 UI 规范错误态：路径失效 / 图标取不到时打红点，配置项保留不删除。
+                Error = ResolveItemError(pinned, icon) ?? ResolveLowResIcon(icon),
             });
         }
 
-        List<AppWindowGroup> running = groups
-            .Where(g => !usedGroups.Contains(g.Key))
-            .ToList();
+        List<AppWindowGroup> running = SortRunning(
+            groups.Where(g => !usedGroups.Contains(g.Key)).ToList(), config.Behavior.RunningSort);
         if (items.Count > 0 && running.Count > 0 && !items[^1].IsSeparator)
         {
             items.Add(new DockItem { IsSeparator = true, Key = "runtime-separator" });
@@ -498,12 +529,14 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
 
         foreach (AppWindowGroup group in running)
         {
+            ImageSource? runningIcon = _icons.GetIcon(group.ExecutablePath, iconPx);
             items.Add(new DockItem
             {
                 Key = group.Key,
                 DisplayName = group.DisplayName,
                 Group = group,
-                Icon = _icons.GetIcon(group.ExecutablePath, iconPx),
+                Icon = runningIcon,
+                Error = ResolveLowResIcon(runningIcon),
             });
         }
 
@@ -520,6 +553,122 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         }
 
         return items;
+    }
+
+    /// <summary>
+    /// FR-304 窗口切换面板：点击「已激活应用」时把该应用所有窗口的缩略图展开并**常驻**，
+    /// 再次点击同一图标收起（等同 macOS「点已激活应用显示所有窗口」）。
+    /// </summary>
+    private void OpenWindowSwitcher(DockIconControl control, AppWindowGroup group)
+    {
+        if (_previewWindow is { IsOpen: true } && _previewPinned
+            && string.Equals(_previewGroupKey, group.Key, StringComparison.Ordinal))
+        {
+            ClosePreview();
+            return;
+        }
+
+        ClosePreview();
+        if (!_current.Behavior.PreviewEnabled)
+        {
+            // 预览被关闭时退化为窗口列表菜单（保留可用性，不静默失败）。
+            OpenMenu(control);
+            return;
+        }
+
+        OpenPreview(control, group, pinned: true);
+        if (_previewWindow is not { IsOpen: true })
+        {
+            OpenMenu(control); // 面板打不开（无可用窗口）时同样退化为菜单
+        }
+    }
+
+    /// <summary>运行区排序（6.10 行为组）：recent 最近使用 / launchTime 启动时间 / manual 首次出现顺序。</summary>
+    private List<AppWindowGroup> SortRunning(List<AppWindowGroup> running, string sort)
+    {
+        for (int i = 0; i < running.Count; i++)
+        {
+            _manualOrder.TryAdd(running[i].Key, _manualOrder.Count);
+        }
+
+        switch (sort)
+        {
+            case "launchTime":
+                return running
+                    .OrderBy(g => ResolveLaunchTime(g), Comparer<DateTime>.Default)
+                    .ToList();
+            case "manual":
+                return running
+                    .OrderBy(g => _manualOrder.TryGetValue(g.Key, out int order) ? order : int.MaxValue)
+                    .ToList();
+            default:
+                return running.OrderByDescending(g => g.LastActiveUtc).ToList();
+        }
+    }
+
+    private DateTime ResolveLaunchTime(AppWindowGroup group)
+    {
+        if (_launchTimes.TryGetValue(group.Key, out DateTime cached))
+        {
+            return cached;
+        }
+
+        DateTime value = DateTime.MaxValue;
+        try
+        {
+            int pid = group.Windows.FirstOrDefault()?.ProcessId ?? 0;
+            if (pid > 0)
+            {
+                value = System.Diagnostics.Process.GetProcessById(pid).StartTime;
+            }
+        }
+        catch (ArgumentException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        _launchTimes[group.Key] = value;
+        return value;
+    }
+
+    /// <summary>
+    /// 10 UI 规范错误态：固定项路径失效或图标提取失败时给出原因（图标上角红点 + ToolTip）。
+    /// 需求第 9 章明确「路径失效时图标显示问号并保留配置，不自动删除」。
+    /// </summary>
+    private string? ResolveItemError(PinnedItem pinned, ImageSource? icon)
+    {
+        if (pinned.Type == "folder" && !string.IsNullOrWhiteSpace(pinned.Path)
+            && !Directory.Exists(pinned.Path))
+        {
+            return Loc.Instance.T("Error_PathMissing");
+        }
+
+        if (pinned.Type == "app" && !string.IsNullOrWhiteSpace(pinned.Path)
+            && !File.Exists(pinned.Path))
+        {
+            return Loc.Instance.T("Error_PathMissing");
+        }
+
+        return icon is null && pinned.Type != "separator"
+            ? Loc.Instance.T("Error_IconMissing")
+            : null;
+    }
+
+    /// <summary>
+    /// 6.11：源图标小于 48px 时不能放大糊掉，标记出来并在 hover 提示用户
+    /// （需求原文「小于 48px 的源图标需标记并提示」）。
+    /// </summary>
+    private string? ResolveLowResIcon(ImageSource? icon)
+    {
+        if (icon is not System.Windows.Media.Imaging.BitmapSource bitmap
+            || bitmap.PixelWidth <= 0 || bitmap.PixelWidth >= 48)
+        {
+            return null;
+        }
+
+        return Loc.Instance.T("Error_IconLowRes", bitmap.PixelWidth);
     }
 
     /// <summary>WD-024：在运行区之后追加系统区（回收站 / 任务视图 / 显示桌面），可单独开关。</summary>
@@ -675,6 +824,7 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
                 : new Thickness(config.Dock.IconSpacing / 2.0, 0,
                     config.Dock.IconSpacing / 2.0, 0);
             control.MouseEnter += (_, _) => OnIconEnter(control);
+            control.MouseLeave += (_, _) => control.SetHoverVisual(false);
             control.PreviewMouseLeftButtonDown += (_, args) =>
                 _drag?.OnPreviewMouseDown(control, args);
             control.PreviewMouseUp += (_, args) => OnIconMouseUp(control, args);
@@ -694,6 +844,7 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             return; // 独占全屏 3D：暂停所有图标动效（FR-603）
         }
 
+        control.SetHoverVisual(true); // FR-205 上移 2px + 4% 亮度
         int index = _iconControls.IndexOf(control);
         _animation.SetHover(index, _iconControls.Count,
             _current.Dock.IconSize, _current.Dock.IconSpacing);
@@ -734,7 +885,7 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         _timers.Schedule(PreviewOpenKey, delay, () => OpenPreview(control, group));
     }
 
-    private void OpenPreview(DockIconControl control, AppWindowGroup group)
+    private void OpenPreview(DockIconControl control, AppWindowGroup group, bool pinned = false)
     {
         if (_preview is null || _timers is null || !IsDockVisible
             || !_iconControls.Contains(control) || AnimationsPaused
@@ -755,6 +906,7 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             .Take(_preview.MaxThumbnails)
             .Select(w => new WindowPreviewTarget(w.Handle, w.Title, w.IsMinimized))
             .ToList();
+        int hiddenWindows = Math.Max(0, group.Windows.Count - targets.Count); // FR-402 超出显示 +N
         if (targets.Count == 0)
         {
             return;
@@ -781,11 +933,12 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             _timers.Schedule(PreviewRefreshKey, 600, RefreshItems);
         _previewWindow = panel;
         _previewGroupKey = group.Key;
+        _previewPinned = pinned;
 
         Point physical = control.PointToScreen(new Point(control.ActualWidth / 2, 0));
         Matrix fromDevice = PresentationSource.FromVisual(control)?
             .CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
-        panel.Open(control.Item.DisplayName, targets, fromDevice.Transform(physical));
+        panel.Open(control.Item.DisplayName, targets, fromDevice.Transform(physical), hiddenWindows);
     }
 
     /// <summary>
@@ -800,9 +953,9 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             return;
         }
 
-        if (Root.IsMouseOver || panel.IsPointerOver)
+        if (_previewPinned || Root.IsMouseOver || panel.IsPointerOver)
         {
-            return;
+            return; // FR-304 切换面板常驻，只有再次点击图标 / Esc / 激活窗口才收起
         }
 
         Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(() =>
@@ -825,6 +978,7 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         PreviewWindow? panel = _previewWindow;
         _previewWindow = null;
         _previewGroupKey = null;
+        _previewPinned = false;
         if (panel is not null)
         {
             panel.ClosePanel();
@@ -975,8 +1129,7 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
                 case "none":
                     break;
                 default:
-                    // FR-304 窗口缩略图切换面板是 P1；M1 用窗口列表菜单代替（明确降级）
-                    OpenMenu(control);
+                    OpenWindowSwitcher(control, group); // FR-304 窗口切换面板
                     break;
             }
 
@@ -1230,6 +1383,12 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
                 control.ContextMenu.IsOpen = false;
             }
         }
+
+        if (_previewWindow?.IsOpen == true)
+        {
+            ClosePreview(); // FR-304 常驻面板用 Esc 收起
+            e.Handled = true;
+        }
     }
 
     private void OnAddAppClick(object sender, RoutedEventArgs e)
@@ -1261,7 +1420,7 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         // 默认主屏用 SystemParameters.WorkArea（按 DIP 且自动排除原生任务栏）；
         // WD-021：配置了非主屏（MonitorIds[0] = "1"/"2"…）时改用该显示器工作区。
         Rect work = SystemParameters.WorkArea;
-        string? monitorId = _current.Dock.MonitorIds?.FirstOrDefault();
+        string? monitorId = _monitorOverride ?? _current.Dock.MonitorIds?.FirstOrDefault();
         if (!string.IsNullOrWhiteSpace(monitorId)
             && !string.Equals(monitorId, "primary", StringComparison.OrdinalIgnoreCase))
         {
@@ -1315,6 +1474,17 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
                 NativeMethods.WINEVENT_OUTOFCONTEXT | NativeMethods.WINEVENT_SKIPOWNPROCESS);
         }
 
+        // FR-203：注册 ShellHook —— 应用调用 FlashWindow 请求注意时 shell 会广播
+        // HSHELL_FLASH（wParam），这是唯一可靠的非注入式「请求注意」信号。
+        if (_current.Behavior.AttentionBounceEnabled && !_shellHookRegistered)
+        {
+            _shellHookRegistered = NativeMethods.RegisterShellHookWindow(handle);
+            if (_shellHookRegistered)
+            {
+                _log.Info(Module, "已注册 ShellHook（注意提示跳动 FR-203 生效）");
+            }
+        }
+
         Closed += (_, _) =>
         {
             if (_minimizeHook != IntPtr.Zero)
@@ -1322,6 +1492,12 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
                 NativeMethods.UnhookWinEvent(_minimizeHook);
                 _minimizeHook = IntPtr.Zero;
                 _minimizeProc = null;
+            }
+
+            if (_shellHookRegistered)
+            {
+                NativeMethods.DeregisterShellHookWindow(handle);
+                _shellHookRegistered = false;
             }
         };
     }
@@ -1350,6 +1526,31 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         }));
     }
 
+    /// <summary>
+    /// FR-203 注意提示跳动：应用调用 FlashWindowEx 请求注意时，在 Dock 侧对应图标
+    /// 原地小幅跳动一次（200ms）。与最小化反馈共用 AnimationEngine 的跳动通道。
+    /// </summary>
+    private void OnAttentionFlash(IntPtr hwnd)
+    {
+        if (!_current.Behavior.AttentionBounceEnabled || AnimationsPaused || hwnd == IntPtr.Zero)
+        {
+            return;
+        }
+
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            for (int i = 0; i < _iconControls.Count; i++)
+            {
+                AppWindowGroup? group = _iconControls[i].Item.Group;
+                if (group is not null && group.Windows.Any(w => w.Handle == hwnd))
+                {
+                    _animation.Attention(i, _current.Dock.IconSize);
+                    break;
+                }
+            }
+        }));
+    }
+
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
         if (msg == unchecked((int)_taskbar.TaskbarCreatedMessage))
@@ -1371,6 +1572,12 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         {
             DumpIconLayout(wParam.ToInt64());
             handled = true;
+        }
+        else if (_shellHookRegistered && msg == unchecked((int)_shellHookMessage)
+                 && wParam.ToInt32() == NativeMethods.HSHELL_FLASH)
+        {
+            // FR-203：lParam 为请求注意的窗口句柄。
+            OnAttentionFlash(lParam);
         }
         else if (msg == NativeMethods.WM_DISPLAYCHANGE)
         {
@@ -1429,6 +1636,227 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     }
 
     /// <summary>
+    /// 6.10 材质组总入口：把「背景模式 / 不透明度 / 模糊强度 / 边框 / 阴影 / 倒影 / 强调色」
+    /// 一次性应用到胶囊上。设计原则：**窗口始终保持 DWM 玻璃（ApplyBackdrop）**，
+    /// 差异全部落在 WPF 胶囊的填色上——这样任何模式下胶囊圆角外侧都能透出桌面，
+    /// 不会出现「非分层窗口画不出透明背景 → 周围一圈黑底」的问题。
+    /// </summary>
+    private void ApplyMaterial(AppearanceConfig a, DockLayoutConfig d)
+    {
+        _accentColor = ResolveAccentColor(a);
+        bool dwm = NativeMethods.IsDwmCompositionEnabled();
+        bool remote = NativeMethods.IsRemoteSession();
+        bool highContrast = SystemParameters.HighContrast;
+
+        // 8.3 兼容性矩阵：DWM 不可用（虚拟机）/ 远程桌面 / 高对比度 → 强制纯色回退。
+        string mode = a.BackgroundMode;
+        string fallback = "";
+        if (!dwm)
+        {
+            mode = "solid";
+            fallback = "DWM 合成不可用";
+        }
+        else if (remote && mode is "acrylic" or "mica" or "image")
+        {
+            mode = "solid";
+            fallback = "远程桌面会话";
+        }
+        else if (highContrast)
+        {
+            mode = "solid";
+            fallback = "高对比度模式";
+        }
+
+        // R2 性能模式：材质固定纯色，不再叠 DWM 玻璃的模糊层。
+        // 注意：不能把窗口背景也改成实色 —— 非分层窗口切不回透明，
+        // 胶囊圆角外侧会出现一圈实色方块，因此玻璃仍保留给"窗口透明"用。
+        if (a.PerformanceMode)
+        {
+            mode = "solid";
+            fallback = fallback.Length > 0 ? fallback : "性能模式";
+        }
+
+        _materialMode = mode;
+        double opacity = Math.Clamp(a.Opacity, 0, 1);
+        // Windows 的 DWM 玻璃强度没有公开调节项（8.3/需求 4.2），
+        // 「模糊强度」落地为胶囊底色浓度：越高越厚，观感上更"磨砂"。
+        double blurFactor = a.BlurLevel switch
+        {
+            "low" => 0.65,
+            "high" => 1.35,
+            _ => 1.0,
+        };
+        _tintAlpha = Math.Clamp(opacity * blurFactor, 0, 1);
+
+        if (fallback.Length > 0)
+        {
+            _log.Info(Module, $"材质回退纯色：{fallback}（背景模式 {a.BackgroundMode} → solid）");
+        }
+
+        if (highContrast)
+        {
+            // 8.3：高对比度下用系统色板并保证边框对比度（不叠任何半透明）。
+            Capsule.Background = SystemColors.WindowBrush;
+            Capsule.BorderBrush = SystemColors.WindowTextBrush;
+            Capsule.BorderThickness = new Thickness(Math.Max(1, a.BorderWidth));
+        }
+        else
+        {
+            Capsule.Background = CreateCapsuleBrush(mode, _tintAlpha);
+            Capsule.BorderBrush = ParseBorderBrush(a.BorderColor);
+            Capsule.BorderThickness = new Thickness(a.BorderWidth);
+        }
+
+        Capsule.CornerRadius = new CornerRadius(d.CornerRadius);
+        Capsule.Padding = new Thickness(
+            d.Padding, d.Padding, d.Padding, d.Padding + 8);
+
+        // 6.10 阴影：无 / 弱 / 中 / 强（custom 按"强"处理，强度由倒影与描边微调）。
+        Capsule.Effect = CreateShadowEffect(a.ShadowLevel);
+
+        // FR-101 底部 1px 高光：深色背景上更亮，高对比度下关闭以免干扰。
+        Highlight.Background = highContrast
+            ? Brushes.Transparent
+            : new LinearGradientBrush(
+                Color.FromArgb(0, 255, 255, 255),
+                Color.FromArgb(90, 255, 255, 255),
+                new Point(0, 0), new Point(1, 0));
+        Highlight.Visibility = highContrast ? Visibility.Collapsed : Visibility.Visible;
+
+        // 8.3 虚拟机 / 远程桌面下不画倒影（需求明确要求）；R2 性能模式一律关闭。
+        bool reflectionAllowed = !a.PerformanceMode && !highContrast && !remote
+            && !string.Equals(mode, "solid", StringComparison.Ordinal);
+        UpdateReflection(reflectionAllowed ? a.Reflection : new ReflectionConfig());
+
+        ApplyIconAccent();
+        ApplyBackdrop();
+    }
+
+    /// <summary>按背景模式生成胶囊底色；none 只留边框，solid 为不透明纯色。</summary>
+    private SolidColorBrush CreateCapsuleBrush(string mode, double tintAlpha)
+    {
+        switch (mode)
+        {
+            case "none":
+                return Brushes.Transparent;
+            case "solid":
+                return new SolidColorBrush(Color.FromArgb(255, 0x1C, 0x1C, 0x1E));
+            default:
+                // acrylic / mica / image：统一用带透明度 tint 让 DWM 玻璃或图片透上来。
+                // （image 模式的落盘图片在 v1 未纳入配置 schema，按 acrylic 渲染并已在文档登记。）
+                return new SolidColorBrush(
+                    Color.FromArgb((byte)Math.Round(tintAlpha * 255), 0x14, 0x14, 0x18));
+        }
+    }
+
+    private static System.Windows.Media.Effects.DropShadowEffect? CreateShadowEffect(string level)
+    {
+        (double blur, double depth, double opacity) = level switch
+        {
+            "none" => (0, 0, 0),
+            "weak" => (10, 2, 0.25),
+            "strong" => (28, 10, 0.5),
+            "custom" => (32, 12, 0.55),
+            _ => (24, 8, 0.28), // medium（需求 10：0 8 24 rgba(0,0,0,.28)）
+        };
+
+        if (blur <= 0)
+        {
+            return null;
+        }
+
+        var effect = new System.Windows.Media.Effects.DropShadowEffect
+        {
+            BlurRadius = blur,
+            ShadowDepth = depth,
+            Opacity = opacity,
+            Color = Colors.Black,
+            Direction = 270, // 向下投影
+        };
+        effect.Freeze();
+        return effect;
+    }
+
+    /// <summary>强调色：AccentSource=system 取系统主题色，否则用配置里的 #AARRGGBB。</summary>
+    private Color ResolveAccentColor(AppearanceConfig a)
+    {
+        if (!string.Equals(a.AccentSource, "system", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(a.AccentColor))
+        {
+            try
+            {
+                Color parsed = (Color)ColorConverter.ConvertFromString(a.AccentColor)!;
+                return Color.FromRgb(parsed.R, parsed.G, parsed.B);
+            }
+            catch (FormatException)
+            {
+            }
+            catch (NotSupportedException)
+            {
+            }
+        }
+
+        uint argb = NativeMethods.GetSystemAccentArgb();
+        return Color.FromRgb((byte)(argb >> 16), (byte)(argb >> 8), (byte)argb);
+    }
+
+    private void ApplyIconAccent()
+    {
+        DockIconControl.AccentDefault = _accentColor; // 新建控件（RenderIcons）直接取该值
+        foreach (DockIconControl control in _iconControls)
+        {
+            control.SetAccent(_accentColor);
+        }
+    }
+
+    /// <summary>
+    /// FR-101 倒影：把图标区底部一段镜像绘制到胶囊内下方。
+    /// 用 VisualBrush + 绝对 Viewbox 精确裁出底部 N px，再对矩形做 Y 轴翻转。
+    /// </summary>
+    private void UpdateReflection(ReflectionConfig reflection)
+    {
+        int height = Math.Clamp(reflection.Height,
+            ConfigRanges.ReflectionHeight.Min, ConfigRanges.ReflectionHeight.Max);
+        double strength = Math.Clamp(reflection.Strength,
+            ConfigRanges.ReflectionStrength.Min, ConfigRanges.ReflectionStrength.Max);
+        double panelWidth = IconsPanel.ActualWidth;
+        double panelHeight = IconsPanel.ActualHeight;
+
+        if (!reflection.Enabled || height <= 0 || strength <= 0.01
+            || panelWidth <= 1 || panelHeight <= 1)
+        {
+            ReflectionHost.Visibility = Visibility.Collapsed;
+            ReflectionHost.Height = 0;
+            ReflectionVisual.Fill = null;
+            return;
+        }
+
+        double crop = Math.Min(height, panelHeight);
+        var brush = new VisualBrush(IconsPanel)
+        {
+            Stretch = Stretch.Fill,
+            AlignmentX = AlignmentX.Left,
+            AlignmentY = AlignmentY.Top,
+            ViewboxUnits = BrushMappingMode.Absolute,
+            Viewbox = new Rect(0, panelHeight - crop, panelWidth, crop),
+        };
+        brush.Freeze();
+
+        // 倒影自上而下淡出（OpacityMask 是 UIElement 的属性，不是 Brush 的）。
+        ReflectionVisual.OpacityMask = new LinearGradientBrush(
+            Color.FromArgb(255, 255, 255, 255),
+            Color.FromArgb(0, 255, 255, 255),
+            new Point(0, 0), new Point(0, 1));
+
+        ReflectionVisual.Fill = brush;
+        ReflectionVisual.Width = panelWidth;
+        ReflectionVisual.Height = crop;
+        ReflectionHost.Height = crop;
+        ReflectionHost.Opacity = strength;
+        ReflectionHost.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
     /// macOS 风格半透明毛玻璃背景。
     /// 关键结论（GitHub 源码审计 + 实机验证）：WPF 的 AllowsTransparency=True（分层窗口）
     /// 永远不会被 DWM 背景接管；且 Win11 上 ACCENT_ENABLE_BLURBEHIND 虽返回成功却不绘制
@@ -1438,9 +1866,10 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     ///   3. DwmExtendFrameIntoClientArea 把整窗扩展为玻璃边框 → Win11 整窗透出模糊桌面，
     ///      且始终绘制（不依赖窗口是否前台），适合常驻 Dock；
     ///   4. DWMWA_WINDOW_CORNER_PREFERENCE=ROUND 让 DWM 把窗口四角裁圆。
+    ///   5. mica 模式改为 DWMWA_SYSTEMBACKDROP_TYPE=MAINWINDOW（需求 4.2 的官方 Mica）。
     /// 必须在 Loaded（窗口已上屏）后调用，SourceInitialized 时 DWM 会拒绝。
     /// </summary>
-    private void ApplyGlass()
+    private void ApplyBackdrop()
     {
         IntPtr handle = new WindowInteropHelper(this).Handle;
         if (handle == IntPtr.Zero)
@@ -1454,9 +1883,16 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             source.CompositionTarget.BackgroundColor = Colors.Transparent;
         }
 
-        if (NativeMethods.DwmIsCompositionEnabled(out int composition) != 0 || composition == 0)
+        if (!NativeMethods.IsDwmCompositionEnabled())
         {
-            _log.Warn(Module, "DWM 合成未启用，毛玻璃不可用，回退纯透明");
+            // 8.3 虚拟机回退：无 DWM 时透明窗口会渲染成黑块，改为系统窗口底色。
+            _log.Warn(Module, "DWM 合成未启用，毛玻璃不可用，回退纯色底");
+            Background = SystemColors.WindowBrush;
+            if (source is not null)
+            {
+                source.CompositionTarget.BackgroundColor = SystemColors.WindowColor;
+            }
+
             return;
         }
 
@@ -1473,9 +1909,18 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         {
             _log.Warn(Module, $"DwmExtendFrameIntoClientArea 失败 HRESULT=0x{hr:X8}");
         }
-        else
+
+        // 6.10 材质：mica 走官方系统背景类型，其余模式关掉系统 backdrop 只留整窗玻璃。
+        int backdrop = string.Equals(_materialMode, "mica", StringComparison.Ordinal)
+            ? NativeMethods.DWMSBT_MAINWINDOW
+            : NativeMethods.DWMSBT_NONE;
+        int backdropResult = NativeMethods.DwmSetWindowAttribute(handle,
+            NativeMethods.DWMWA_SYSTEMBACKDROP_TYPE, ref backdrop, sizeof(int));
+        if (backdropResult != 0
+            && string.Equals(_materialMode, "mica", StringComparison.Ordinal))
         {
-            _log.Info(Module, "已启用整窗毛玻璃背景（DwmExtendFrameIntoClientArea）");
+            // Win11 21H2 无该属性：Mica 降级为整窗玻璃（已在文档登记）。
+            _log.Info(Module, $"Mica 不可用 HRESULT=0x{backdropResult:X8}，降级为整窗玻璃");
         }
 
         // DWM 圆角：胶囊四角由 DWM 裁圆，配合玻璃得到 macOS 风格。
@@ -1484,7 +1929,7 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             ref corner, sizeof(int));
     }
 
-    private void OnLoaded(object? sender, RoutedEventArgs e) => ApplyGlass();
+    private void OnLoaded(object? sender, RoutedEventArgs e) => ApplyBackdrop();
 
     private static SolidColorBrush ParseBorderBrush(string value)
     {

@@ -49,6 +49,12 @@ public sealed class DockLayoutConfig
     public int CornerRadius { get; set; } = 22;
     public string IconShape { get; set; } = "roundedRect";
     public int OffsetFromEdge { get; set; } = 8;
+
+    /// <summary>
+    /// 6.7 多显示器：除 MonitorIds[0] 外的每块屏幕都再开一条 Dock（默认关闭，
+    /// 与 macOS 一致默认只在主屏显示）。副屏 Dock 常驻显示、不参与自动隐藏。
+    /// </summary>
+    public bool PerMonitorDocks { get; set; }
 }
 
 /// <summary>外观参数（6.10）。</summary>
@@ -68,6 +74,13 @@ public sealed class AppearanceConfig
 
     /// <summary>自定义强调色（#AARRGGBB）；空串表示跟随系统强调色（6.10 颜色组）。</summary>
     public string AccentColor { get; set; } = "";
+
+    /// <summary>
+    /// R2 性能模式：低端机 / 集显掉帧时的降级开关。
+    /// 开启后关闭倒影、材质固定纯色（不再叠 DWM 玻璃的模糊层）、
+    /// 预览面板不做缩略图实时刷新（FR-404 的"可整体关闭"）。
+    /// </summary>
+    public bool PerformanceMode { get; set; }
 }
 
 /// <summary>倒影参数（M1 仅落配置，不做渲染）。</summary>
@@ -97,6 +110,12 @@ public sealed class AnimationConfig
 
     /// <summary>运行指示点淡入淡出时长（FR-204）。</summary>
     public int IndicatorFadeMs { get; set; } = 150;
+
+    /// <summary>
+    /// 多窗口运行指示样式（FR-102）：dot 单点 / wide 更宽的点 / triple 三点。
+    /// 需求要求「多窗口时点数量不增加，改用更宽的点或 3 点样式，可配」。
+    /// </summary>
+    public string IndicatorStyle { get; set; } = "dot";
 }
 
 /// <summary>交互行为参数（6.10 / 6.6 / M2 新增）。</summary>
@@ -156,6 +175,14 @@ public sealed class BehaviorConfig
 
     /// <summary>允许从资源管理器拖入 .exe/.lnk/文件夹添加固定项（WD-030 / FR-303）。</summary>
     public bool DragDropAddEnabled { get; set; } = true;
+
+    /// <summary>
+    /// 图标名称显示方式（8.4）：tooltip 悬停显示（默认）/ always 图标内常显 / never 不显示。
+    /// </summary>
+    public string IconLabelMode { get; set; } = "tooltip";
+
+    /// <summary>注意提示跳动（FR-203）：应用请求注意（ShellHook HSHELL_FLASH）时图标跳一次。</summary>
+    public bool AttentionBounceEnabled { get; set; } = true;
 }
 
 /// <summary>固定项；type = app | uwp | separator。</summary>
@@ -212,4 +239,6 @@ public static class ConfigRanges
     public static readonly string[] DecayModes = { "cosine", "gaussian", "linear" };
     public static readonly string[] ClickActiveAppModes = { "minimize", "none", "showWindows" };
     public static readonly string[] RunningSorts = { "recent", "launchTime", "manual" };
+    public static readonly string[] IndicatorStyles = { "dot", "wide", "triple" };
+    public static readonly string[] IconLabelModes = { "tooltip", "always", "never" };
 }

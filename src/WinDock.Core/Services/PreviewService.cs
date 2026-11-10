@@ -23,6 +23,9 @@ public sealed class PreviewService : IPreviewService
     private readonly List<Thumbnail> _items = new();
     private bool _disposed;
 
+    /// <summary>R2 性能模式：为 false 时不注册 DWM 实时缩略图，面板退化为"标题 + 占位"。</summary>
+    private bool _liveThumbnails = true;
+
     public PreviewService(ILogService log)
     {
         _log = log;
@@ -54,6 +57,21 @@ public sealed class PreviewService : IPreviewService
     {
         MaxThumbnails = Math.Clamp(config.Behavior.PreviewMaxWindows,
             ConfigRanges.PreviewMaxWindows.Min, ConfigRanges.PreviewMaxWindows.Max);
+
+        // R2 性能模式关闭实时刷新：已有句柄立即注销，回到"标题 + 占位"。
+        bool live = !config.Appearance.PerformanceMode;
+        if (live != _liveThumbnails)
+        {
+            _liveThumbnails = live;
+            foreach (Thumbnail item in _items)
+            {
+                Unregister(item);
+            }
+
+            _items.Clear();
+            StateChanged?.Invoke(this, EventArgs.Empty);
+        }
+
         if (_items.Count > MaxThumbnails)
         {
             // 上限被调小：立即释放多出来的句柄，不能等下次面板打开。
@@ -93,7 +111,7 @@ public sealed class PreviewService : IPreviewService
                 continue;
             }
 
-            if (!IsAvailable || host == IntPtr.Zero)
+            if (!IsAvailable || host == IntPtr.Zero || !_liveThumbnails)
             {
                 _items.Add(new Thumbnail(IntPtr.Zero, target.Handle, target.Title,
                     0, 0, IsMinimized: false));

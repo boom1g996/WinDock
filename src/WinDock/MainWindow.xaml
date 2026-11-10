@@ -18,8 +18,26 @@
                 VerticalAlignment="Bottom"
                 BorderThickness="1"
                 Padding="10">
-            <StackPanel x:Name="IconsPanel" Orientation="Horizontal"
-                        VerticalAlignment="Bottom" />
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+                <StackPanel x:Name="IconsPanel" Grid.Row="0" Orientation="Horizontal"
+                            VerticalAlignment="Bottom" />
+                <!-- FR-101 倒影：镜像底边一小段图标，强度/高度可调（默认关闭） -->
+                <Border x:Name="ReflectionHost" Grid.Row="1" Height="0" Visibility="Collapsed"
+                        Margin="0,2,0,0" ClipToBounds="True" IsHitTestVisible="False">
+                    <Rectangle x:Name="ReflectionVisual" HorizontalAlignment="Left" VerticalAlignment="Top">
+                        <Rectangle.LayoutTransform>
+                            <ScaleTransform ScaleX="1" ScaleY="-1" />
+                        </Rectangle.LayoutTransform>
+                    </Rectangle>
+                </Border>
+                <!-- FR-101 底部 1px 高光 -->
+                <Border x:Name="Highlight" Grid.Row="0" Height="1" VerticalAlignment="Bottom"
+                        HorizontalAlignment="Stretch" IsHitTestVisible="False" />
+            </Grid>
         </Border>
     </Grid>
 </Window>

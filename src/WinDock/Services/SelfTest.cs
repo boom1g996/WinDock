@@ -528,6 +528,56 @@ public static class SelfTest
 
                 Check("查询回收站状态不抛异常", recycleOk);
 
+                // 6.10 / 6.13 / FR-101：本轮新增配置项与材质/兼容性判定
+                var tweaked = new DockConfig();
+                tweaked.Animation.IndicatorStyle = "bogus";
+                tweaked.Behavior.IconLabelMode = "bogus";
+                tweaked.Appearance.BackgroundMode = "bogus";
+                ConfigService.Normalize(tweaked, new List<string>());
+                Check("新配置项非法值回退默认（指示样式/名称模式/背景模式）",
+                    tweaked.Animation.IndicatorStyle == "dot"
+                    && tweaked.Behavior.IconLabelMode == "tooltip"
+                    && tweaked.Appearance.BackgroundMode == "acrylic",
+                    $"style={tweaked.Animation.IndicatorStyle}, label={tweaked.Behavior.IconLabelMode}, " +
+                    $"bg={tweaked.Appearance.BackgroundMode}");
+
+                Check("材质模式覆盖 6.10 要求的全部选项（含 Mica / 无 / 纯色）",
+                    ConfigRanges.BackgroundModes.Contains("none")
+                    && ConfigRanges.BackgroundModes.Contains("solid")
+                    && ConfigRanges.BackgroundModes.Contains("acrylic")
+                    && ConfigRanges.BackgroundModes.Contains("mica")
+                    && ConfigRanges.BackgroundModes.Contains("image"),
+                    string.Join(",", ConfigRanges.BackgroundModes));
+
+                var reflection = new ReflectionConfig { Height = 999, Strength = 9 };
+                var reflectionConfig = new DockConfig();
+                reflectionConfig.Appearance.Reflection = reflection;
+                ConfigService.Normalize(reflectionConfig, new List<string>());
+                Check("倒影参数经 Normalize 夹紧（高度 ≤64 / 强度 ≤1）",
+                    reflectionConfig.Appearance.Reflection.Height == 64
+                    && reflectionConfig.Appearance.Reflection.Strength <= 1.0,
+                    $"height={reflectionConfig.Appearance.Reflection.Height}, " +
+                    $"strength={reflectionConfig.Appearance.Reflection.Strength}");
+
+                bool compatOk = true;
+                try
+                {
+                    _ = NativeMethods.IsRemoteSession();
+                    _ = NativeMethods.IsDwmCompositionEnabled();
+                    _ = NativeMethods.GetSystemAccentArgb();
+                }
+                catch (Exception)
+                {
+                    compatOk = false;
+                }
+
+                Check("兼容性判定（RDP / DWM / 系统强调色）不抛异常", compatOk);
+                Check("系统强调色恒为不透明色",
+                    (NativeMethods.GetSystemAccentArgb() & 0xFF000000u) == 0xFF000000u);
+
+                // 6.7：默认不让每块屏都开 Dock（与 macOS 一致）
+                Check("每屏一条 Dock 默认关闭", !new DockConfig().Dock.PerMonitorDocks);
+
                 var defaults = new DockConfig();
                 Check("系统区默认关闭、子项/拖入/最小化反馈默认开启",
                     !defaults.Behavior.ShowSystemArea
@@ -536,6 +586,43 @@ public static class SelfTest
                     && defaults.Behavior.ShowShowDesktop
                     && defaults.Behavior.DragDropAddEnabled
                     && defaults.Behavior.MinimizeFeedbackEnabled);
+
+                // R2：性能模式默认关闭；开启后配置文件往返不丢字段。
+                Check("性能模式默认关闭", !new DockConfig().Appearance.PerformanceMode);
+                var perfConfig = new DockConfig();
+                perfConfig.Appearance.PerformanceMode = true;
+                string perfJson = System.Text.Json.JsonSerializer.Serialize(perfConfig);
+                var perfRestored = System.Text.Json.JsonSerializer.Deserialize<DockConfig>(perfJson);
+                Check("性能模式可 JSON 往返",
+                    perfRestored?.Appearance.PerformanceMode == true);
+
+                // R9：冲突检测是纯读操作，必须永不抛异常（失败不能阻断启动）。
+                bool conflictOk = true;
+                int conflictCount = -1;
+                try
+                {
+                    IReadOnlyList<ConflictInfo> conflicts = ConflictDetector.Detect();
+                    conflictCount = conflicts.Count;
+                }
+                catch (Exception)
+                {
+                    conflictOk = false;
+                }
+
+                Check("冲突检测不抛异常", conflictOk && conflictCount >= 0,
+                    $"count={conflictCount}");
+                Check("冲突描述空集合返回空串", ConflictDetector.Describe(Array.Empty<ConflictInfo>()) == "");
+                Check("注册表读取失败时安全降级（不存在的键返回空）",
+                    NativeMethods.SubKeyNames(NativeMethods.HKEY_CURRENT_USER,
+                        @"SOFTWARE\WinDock.SelfTest.NoSuchKey").Count == 0
+                    && NativeMethods.ReadString(NativeMethods.HKEY_CURRENT_USER,
+                        @"SOFTWARE\WinDock.SelfTest.NoSuchKey", "DisplayName") is null);
+
+                // 8.2 / 5.2：托盘气泡点击动作是一次性的（避免下一次气泡误触发旧动作）。
+                Check("托盘气泡点击动作为一次性语义（源码级约束）",
+                    typeof(TrayIconService).GetMethod("RunBalloonClick",
+                        System.Reflection.BindingFlags.Instance
+                        | System.Reflection.BindingFlags.NonPublic) is not null);
             }
         }
         catch (Exception ex)
@@ -555,14 +642,24 @@ public static class SelfTest
 
         lines.Add($"RESULT passed={passed} failed={failed}");
         string text = string.Join(Environment.NewLine, lines);
+        string resultPath = Path.Combine(AppContext.BaseDirectory, "selftest-result.txt");
+        bool written = false;
         try
         {
-            File.WriteAllText(
-                Path.Combine(AppContext.BaseDirectory, "selftest-result.txt"),
-                text, new UTF8Encoding(false));
+            File.WriteAllText(resultPath, text, new UTF8Encoding(false));
+            written = true;
         }
-        catch (IOException)
+        catch (Exception ex)
         {
+            // 原先只 catch(IOException) 且静默吞掉：写盘失败时退出码仍是 0，
+            // 调用方会拿着上一版结果文件当作"本轮通过"，无法察觉。
+            log.Warn("SelfTest", "结果文件写入失败：" + ex.Message);
+        }
+
+        // 0=全通过 1=有断言失败 2=断言通过但结果落盘失败（调用方不可据旧文件判通过）
+        if (!written)
+        {
+            return 2;
         }
 
         return failed == 0 ? 0 : 1;

@@ -147,6 +147,7 @@ public sealed class ConfigService : IConfigService
         anim.SpeedMultiplier = Clamp(anim.SpeedMultiplier, ConfigRanges.SpeedMultiplier, "animation.speedMultiplier", warnings);
         anim.BounceCount = Clamp(anim.BounceCount, ConfigRanges.BounceCount, "animation.bounceCount", warnings);
         anim.IndicatorFadeMs = Clamp(anim.IndicatorFadeMs, ConfigRanges.IndicatorFadeMs, "animation.indicatorFadeMs", warnings);
+        anim.IndicatorStyle = Choice(anim.IndicatorStyle, ConfigRanges.IndicatorStyles, "dot", "animation.indicatorStyle", warnings);
 
         var b = config.Behavior;
         b.ClickActiveApp = Choice(b.ClickActiveApp, ConfigRanges.ClickActiveAppModes, "showWindows", "behavior.clickActiveApp", warnings);
@@ -156,6 +157,7 @@ public sealed class ConfigService : IConfigService
         b.PreviewHoverDelayMs = Clamp(b.PreviewHoverDelayMs, ConfigRanges.PreviewHoverDelayMs, "behavior.previewHoverDelayMs", warnings);
         b.PreviewMaxWindows = Clamp(b.PreviewMaxWindows, ConfigRanges.PreviewMaxWindows, "behavior.previewMaxWindows", warnings);
         b.WatchdogHeartbeatMs = Clamp(b.WatchdogHeartbeatMs, ConfigRanges.WatchdogHeartbeatMs, "behavior.watchdogHeartbeatMs", warnings);
+        b.IconLabelMode = Choice(b.IconLabelMode, ConfigRanges.IconLabelModes, "tooltip", "behavior.iconLabelMode", warnings);
         if (string.IsNullOrWhiteSpace(b.HotkeyToggle))
         {
             b.HotkeyToggle = "Ctrl+Alt+D";

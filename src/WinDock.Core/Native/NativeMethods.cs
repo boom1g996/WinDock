@@ -257,6 +257,19 @@ public static partial class NativeMethods
     [DllImport("dwmapi.dll", SetLastError = true)]
     public static extern int DwmExtendFrameIntoClientArea(IntPtr hWnd, ref MARGINS pMarInset);
 
+    /// <summary>SHGFI_PIDL：让 SHGetFileInfo 的第一参数按 ITEMIDLIST 解释（UWP 图标用）。</summary>
+    public const uint SHGFI_PIDL = 0x00000008;
+
+    /// <summary>SHGFI_LARGEICON：取 32px 大图标（UWP 磁贴图标档位）。</summary>
+    public const uint SHGFI_LARGEICON = 0x00000000;
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    public static extern int SHParseDisplayName(string pszName, IntPtr pbc,
+        out IntPtr ppidl, uint sfgaoIn, out uint psfgaoOut);
+
+    [DllImport("shell32.dll", SetLastError = true)]
+    public static extern void ILFree(IntPtr pidl);
+
     [DllImport("shell32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     public static extern IntPtr SHGetFileInfo(string pszPath, uint dwFileAttributes,
         ref SHFILEINFO psfi, uint cbFileInfo, uint uFlags);

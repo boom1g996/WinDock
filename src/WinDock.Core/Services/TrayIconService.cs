@@ -87,14 +87,19 @@ public sealed class TrayIconService : IDisposable
         _added = false;
     }
 
+    /// <summary>气泡点击动作（一次性）：5.2 崩溃恢复「一键恢复」用完即清。</summary>
+    private Action? _balloonClick;
+
     /// <summary>托盘气泡通知（等价 WinForms NotifyIcon.ShowBalloonTip）。</summary>
-    public void ShowBalloon(string title, string text, bool warning)
+    /// <param name="onClick">用户点击气泡时执行；null 表示气泡仅提示。</param>
+    public void ShowBalloon(string title, string text, bool warning, Action? onClick = null)
     {
         if (_disposed || !_added)
         {
             return;
         }
 
+        _balloonClick = onClick;
         var data = BaseData();
         data.uFlags = NIF_INFO;
         data.szInfo = Truncate(text, 255);
@@ -198,6 +203,9 @@ public sealed class TrayIconService : IDisposable
 
         switch (message)
         {
+            case NIN_BALLOONUSERCLICK:
+                RunBalloonClick();
+                break;
             case WM_RBUTTONUP:
                 ShowContextMenu();
                 break;
@@ -212,6 +220,26 @@ public sealed class TrayIconService : IDisposable
                 }
 
                 break;
+        }
+    }
+
+    /// <summary>执行并清除气泡点击动作（一次性，避免下一次气泡误触发旧动作）。</summary>
+    private void RunBalloonClick()
+    {
+        Action? action = _balloonClick;
+        _balloonClick = null;
+        if (action is null)
+        {
+            return;
+        }
+
+        try
+        {
+            action();
+        }
+        catch (Exception ex)
+        {
+            _log.Error(Module, "托盘气泡点击动作失败", ex);
         }
     }
 

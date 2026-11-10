@@ -54,6 +54,13 @@ public partial class PreviewWindow : Window
         IntPtr handle = new WindowInteropHelper(this).Handle;
         HwndSource? source = HwndSource.FromHwnd(handle);
         source?.AddHook(WndProc);
+
+        // 10 UI 规范：面板圆角 14px。WPF 的 Border 只负责内容裁切，
+        // 窗口本身仍是矩形，必须让 DWM 把 HWND 也裁成圆角，
+        // 否则四角会露出窗口底色（DWM 缩略图要求非分层窗口，不能靠透明背景解决）。
+        int corner = NativeMethods.DWMWCP_ROUND;
+        NativeMethods.DwmSetWindowAttribute(handle, NativeMethods.DWMWA_WINDOW_CORNER_PREFERENCE,
+            ref corner, sizeof(int));
     }
 
     private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -85,14 +92,18 @@ public partial class PreviewWindow : Window
     public bool IsPointerOver => IsMouseOver;
 
     /// <param name="anchorTopDip">图标顶边中点的屏幕坐标（DIP），面板在其正上方居中。</param>
+    /// <param name="hidden">超出预览上限未展开的窗口数（FR-402「超出显示 +N」）。</param>
     public void Open(string appName, IReadOnlyList<WindowPreviewTarget> targets,
-        Point anchorTopDip)
+        Point anchorTopDip, int hidden = 0)
     {
         _targets.Clear();
         _targets.AddRange(targets);
         _headerApp = appName;
         BuildItems(targets);
-        HeaderText.Text = $"{appName} · {Loc.Instance.T("Preview_WindowCount", targets.Count)}";
+        HeaderText.Text = hidden > 0
+            ? $"{appName} · {Loc.Instance.T("Preview_WindowCount", targets.Count)}"
+              + $" · {Loc.Instance.T("Preview_MoreWindows", hidden)}"
+            : $"{appName} · {Loc.Instance.T("Preview_WindowCount", targets.Count)}";
 
         Show();
         _open = true;

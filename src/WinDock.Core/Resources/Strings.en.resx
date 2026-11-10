@@ -66,10 +66,10 @@
   <data name="Guide_S1_Text" xml:space="preserve"><value>WinDock shows a macOS-style floating Dock at the bottom of the screen for launching, switching and managing your apps. This version never hides or modifies the native Windows taskbar and never changes system files. You can exit at any time from the tray icon.</value></data>
   <data name="Guide_S2_Title" xml:space="preserve"><value>Choose how the taskbar coexists</value></data>
   <data name="Guide_S2_Text" xml:space="preserve"><value>There are three approaches. This version defaults to, and only enables, Beautify for the best compatibility.</value></data>
-  <data name="Guide_S2_Hint" xml:space="preserve"><value>The other two modes require hiding or moving the native taskbar and have not been verified on real hardware; they stay disabled for this milestone.</value></data>
+  <data name="Guide_S2_Hint" xml:space="preserve"><value>Replace mode hides the native taskbar. Windows has no public API for this and it may fail on some builds; you can always pick "Restore native taskbar" from the tray menu, and the watchdog restores it automatically after a crash.</value></data>
   <data name="Guide_Mode_Beautify" xml:space="preserve"><value>Beautify (recommended): keep the taskbar, add a floating Dock</value></data>
-  <data name="Guide_Mode_Coexist" xml:space="preserve"><value>Coexist: taskbar and Dock both visible (not enabled)</value></data>
-  <data name="Guide_Mode_Replace" xml:space="preserve"><value>Replace: hide the native taskbar (not enabled)</value></data>
+  <data name="Guide_Mode_Coexist" xml:space="preserve"><value>Coexist: keep the taskbar but hide its search, Task View and widgets, leaving only the tray</value></data>
+  <data name="Guide_Mode_Replace" xml:space="preserve"><value>Replace: hide the native taskbar (experimental, one-click restore)</value></data>
   <data name="Guide_S3_Title" xml:space="preserve"><value>Pick a starting look</value></data>
   <data name="Guide_S3_Text" xml:space="preserve"><value>Icon size, corner radius, opacity and magnification can be changed later in Settings and apply instantly.</value></data>
   <data name="Guide_Preset_Simple" xml:space="preserve"><value>Minimal</value></data>
@@ -153,4 +153,178 @@
   <data name="Menu_OpenFolder" xml:space="preserve"><value>Open folder</value></data>
   <data name="Error_FolderNotFound" xml:space="preserve"><value>Folder does not exist or is inaccessible.</value></data>
   <data name="Menu_JumpList" xml:space="preserve"><value>Recent / frequent</value></data>
+  <data name="Error_PathMissing" xml:space="preserve">
+    <value>Path is missing (kept in config, right-click to remove)</value>
+  </data>
+  <data name="Error_IconMissing" xml:space="preserve">
+    <value>Icon could not be extracted, showing placeholder</value>
+  </data>
+  <data name="Error_IconLowRes" xml:space="preserve">
+    <value>Source icon is only {0}px, so it looks soft when scaled up</value>
+  </data>
+  <data name="Preview_MoreWindows" xml:space="preserve">
+    <value>{0} more window(s)</value>
+  </data>
+  <data name="Dock_QuestionIcon" xml:space="preserve">
+    <value>?</value>
+  </data>
+  <data name="Settings_ValueMs" xml:space="preserve">
+    <value>{0} ms</value>
+  </data>
+  <data name="Settings_BackgroundMode" xml:space="preserve">
+    <value>Background mode</value>
+  </data>
+  <data name="Settings_BgNone" xml:space="preserve">
+    <value>None (icons only)</value>
+  </data>
+  <data name="Settings_BgSolid" xml:space="preserve">
+    <value>Solid</value>
+  </data>
+  <data name="Settings_BgAcrylic" xml:space="preserve">
+    <value>Acrylic</value>
+  </data>
+  <data name="Settings_BgMica" xml:space="preserve">
+    <value>Mica</value>
+  </data>
+  <data name="Settings_BgImage" xml:space="preserve">
+    <value>Custom image (rendered as acrylic)</value>
+  </data>
+  <data name="Settings_BorderColor" xml:space="preserve">
+    <value>Border color (#AARRGGBB)</value>
+  </data>
+  <data name="Settings_BorderWidth" xml:space="preserve">
+    <value>Border width</value>
+  </data>
+  <data name="Settings_ReflectionHeight" xml:space="preserve">
+    <value>Reflection height</value>
+  </data>
+  <data name="Settings_AnimationSpeed" xml:space="preserve">
+    <value>Animation speed</value>
+  </data>
+  <data name="Settings_Decay" xml:space="preserve">
+    <value>Decay curve</value>
+  </data>
+  <data name="Settings_DecayCosine" xml:space="preserve">
+    <value>Cosine</value>
+  </data>
+  <data name="Settings_DecayGaussian" xml:space="preserve">
+    <value>Gaussian</value>
+  </data>
+  <data name="Settings_DecayLinear" xml:space="preserve">
+    <value>Linear</value>
+  </data>
+  <data name="Settings_ReduceMotion" xml:space="preserve">
+    <value>Follow system "reduce motion"</value>
+  </data>
+  <data name="Settings_AutoHide" xml:space="preserve">
+    <value>Auto hide</value>
+  </data>
+  <data name="Settings_HideDelay" xml:space="preserve">
+    <value>Hide delay</value>
+  </data>
+  <data name="Settings_ClickActiveApp" xml:space="preserve">
+    <value>Clicking the active app</value>
+  </data>
+  <data name="Settings_ClickShowWindows" xml:space="preserve">
+    <value>Show window switcher</value>
+  </data>
+  <data name="Settings_ClickMinimize" xml:space="preserve">
+    <value>Minimize</value>
+  </data>
+  <data name="Settings_ClickNone" xml:space="preserve">
+    <value>Do nothing</value>
+  </data>
+  <data name="Settings_RunningSort" xml:space="preserve">
+    <value>Running apps order</value>
+  </data>
+  <data name="Settings_SortRecent" xml:space="preserve">
+    <value>Recent use</value>
+  </data>
+  <data name="Settings_SortLaunch" xml:space="preserve">
+    <value>Launch time</value>
+  </data>
+  <data name="Settings_SortManual" xml:space="preserve">
+    <value>Manual (first seen)</value>
+  </data>
+  <data name="Settings_IndicatorStyle" xml:space="preserve">
+    <value>Running indicator</value>
+  </data>
+  <data name="Settings_IndicatorDot" xml:space="preserve">
+    <value>Dot</value>
+  </data>
+  <data name="Settings_IndicatorWide" xml:space="preserve">
+    <value>Wide dot</value>
+  </data>
+  <data name="Settings_IndicatorTriple" xml:space="preserve">
+    <value>Three dots</value>
+  </data>
+  <data name="Settings_IconLabelMode" xml:space="preserve">
+    <value>Icon label</value>
+  </data>
+  <data name="Settings_LabelTooltip" xml:space="preserve">
+    <value>Tooltip on hover</value>
+  </data>
+  <data name="Settings_LabelAlways" xml:space="preserve">
+    <value>Always visible</value>
+  </data>
+  <data name="Settings_LabelNever" xml:space="preserve">
+    <value>Hidden</value>
+  </data>
+  <data name="Settings_Hotkey" xml:space="preserve">
+    <value>Show/hide hotkey</value>
+  </data>
+  <data name="Settings_TrayIcon" xml:space="preserve">
+    <value>Show tray icon</value>
+  </data>
+  <data name="Settings_AttentionBounce" xml:space="preserve">
+    <value>Bounce when an app requests attention</value>
+  </data>
+  <data name="Settings_Monitor" xml:space="preserve">
+    <value>Show on monitor</value>
+  </data>
+  <data name="Settings_MonitorPrimary" xml:space="preserve">
+    <value>Primary</value>
+  </data>
+  <data name="Settings_MonitorN" xml:space="preserve">
+    <value>Secondary ({0}×{1})</value>
+  </data>
+  <data name="Settings_PerMonitorDocks" xml:space="preserve">
+    <value>Show a Dock on every monitor (secondary always visible)</value>
+  </data>
+  <data name="Settings_PerformanceMode" xml:space="preserve">
+    <value>Performance mode (no reflection, blur or live thumbnails)</value>
+  </data>
+  <data name="Settings_PerformanceHint" xml:space="preserve">
+    <value>Enable on low-end or integrated GPUs: the Dock uses an opaque solid fill and previews show titles only.</value>
+  </data>
+  <data name="Settings_RestartElevated" xml:space="preserve">
+    <value>Restart Dock as administrator</value>
+  </data>
+  <data name="Settings_AdminHint" xml:space="preserve">
+    <value>Apps running as administrator cannot be controlled by a normal-privilege Dock (Windows UIPI limit; not bypassed in this version). Use the button above to restart the Dock elevated.</value>
+  </data>
+  <data name="Settings_ConflictNone" xml:space="preserve">
+    <value>No third-party taskbar customization tool conflicting with the Dock was detected.</value>
+  </data>
+  <data name="Settings_ConflictFound" xml:space="preserve">
+    <value>Possible conflicting tools detected: {0}. Running both on the taskbar may cause misplacement or flicker.</value>
+  </data>
+  <data name="Settings_HostMissing" xml:space="preserve">
+    <value>DockHost.exe not found. Please verify the installation folder.</value>
+  </data>
+  <data name="Tray_RestartElevated" xml:space="preserve">
+    <value>Restart Dock as administrator</value>
+  </data>
+  <data name="Tray_ConflictTitle" xml:space="preserve">
+    <value>Third-party taskbar tool detected</value>
+  </data>
+  <data name="Tray_ConflictText" xml:space="preserve">
+    <value>Found {0}, which may compete with the Dock for the taskbar. Close it if rendering looks wrong.</value>
+  </data>
+  <data name="Tray_OverflowTitle" xml:space="preserve">
+    <value>The system tray needs the native taskbar</value>
+  </data>
+  <data name="Tray_OverflowText" xml:space="preserve">
+    <value>You are in "Replace" mode, so the native taskbar is hidden and tray icons have nowhere to show. Click here to switch to "Coexist": keep only the tray area and let the Dock handle the rest.</value>
+  </data>
 </root>

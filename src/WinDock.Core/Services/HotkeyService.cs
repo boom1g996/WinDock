@@ -14,13 +14,13 @@ public sealed class HotkeyService : IHotkeyService
 {
     private const string Module = "Hotkey";
     private const int HotkeyId = 0x5A4D;
-    private const uint Modifiers = MOD_CONTROL | MOD_ALT | MOD_NOREPEAT;
-    private const uint VirtualKeyD = 0x44;
+    private const string DefaultSpec = "Ctrl+Alt+D";
 
     private readonly ILogService _log;
     private IntPtr _hwnd;
     private bool _enabled = true;
     private bool _registered;
+    private string _spec = DefaultSpec;
 
     public HotkeyService(ILogService log)
     {
@@ -36,6 +36,17 @@ public sealed class HotkeyService : IHotkeyService
     public void ApplyConfig(DockConfig config)
     {
         _enabled = config.Behavior.HotkeyEnabled;
+        string next = string.IsNullOrWhiteSpace(config.Behavior.HotkeyToggle)
+            ? DefaultSpec
+            : config.Behavior.HotkeyToggle.Trim();
+        if (!string.Equals(next, _spec, StringComparison.OrdinalIgnoreCase))
+        {
+            // 6.10 快捷键可配置：换组合键必须注销旧注册再重注册，
+            // 否则 RegisterHotKey 会以「已注册」直接返回成功但仍是旧键。
+            _spec = next;
+            Unregister();
+        }
+
         Apply();
     }
 
@@ -58,15 +69,25 @@ public sealed class HotkeyService : IHotkeyService
             return;
         }
 
-        if (!RegisterHotKey(_hwnd, HotkeyId, Modifiers, VirtualKeyD))
+        if (!TryParseSpec(_spec, out uint modifiers, out uint virtualKey))
+        {
+            _log.Warn(Module, $"快捷键配置无法解析：{_spec}，回退 {DefaultSpec}");
+            _spec = DefaultSpec;
+            if (!TryParseSpec(_spec, out modifiers, out virtualKey))
+            {
+                return;
+            }
+        }
+
+        if (!RegisterHotKey(_hwnd, HotkeyId, modifiers | MOD_NOREPEAT, virtualKey))
         {
             int error = Marshal.GetLastWin32Error();
-            _log.Warn(Module, $"Ctrl+Alt+D 注册失败 Win32Error={error}（可能被其他程序占用），快捷键降级为不可用");
+            _log.Warn(Module, $"{_spec} 注册失败 Win32Error={error}（可能被其他程序占用），快捷键降级为不可用");
             return;
         }
 
         _registered = true;
-        _log.Info(Module, "全局快捷键 Ctrl+Alt+D 已注册");
+        _log.Info(Module, $"全局快捷键 {_spec} 已注册");
     }
 
     private void Unregister()
@@ -88,5 +109,76 @@ public sealed class HotkeyService : IHotkeyService
         }
 
         _registered = false;
+    }
+
+    /// <summary>
+    /// 解析 "Ctrl+Alt+D" / "Ctrl+Shift+D" / "Ctrl+Alt+Space" 形式的快捷键。
+    /// 只支持单字符键、空格与 F1~F24；解析失败返回 false 由调用方回退默认值。
+    /// </summary>
+    private static bool TryParseSpec(string spec, out uint modifiers, out uint virtualKey)
+    {
+        modifiers = 0;
+        virtualKey = 0;
+        if (string.IsNullOrWhiteSpace(spec))
+        {
+            return false;
+        }
+
+        string[] parts = spec.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length == 0)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < parts.Length; i++)
+        {
+            string token = parts[i];
+            bool last = i == parts.Length - 1;
+            if (string.Equals(token, "Ctrl", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(token, "Control", StringComparison.OrdinalIgnoreCase))
+            {
+                modifiers |= MOD_CONTROL;
+            }
+            else if (string.Equals(token, "Alt", StringComparison.OrdinalIgnoreCase))
+            {
+                modifiers |= MOD_ALT;
+            }
+            else if (string.Equals(token, "Shift", StringComparison.OrdinalIgnoreCase))
+            {
+                modifiers |= MOD_SHIFT;
+            }
+            else if (string.Equals(token, "Win", StringComparison.OrdinalIgnoreCase))
+            {
+                modifiers |= MOD_WIN;
+            }
+            else if (last)
+            {
+                if (string.Equals(token, "Space", StringComparison.OrdinalIgnoreCase))
+                {
+                    virtualKey = 0x20;
+                }
+                else if (token.Length == 1 && char.IsLetterOrDigit(token[0]))
+                {
+                    virtualKey = char.ToUpperInvariant(token[0]);
+                }
+                else if (token.Length is >= 2 and <= 3
+                         && (token[0] is 'F' or 'f')
+                         && int.TryParse(token[1..], out int fn)
+                         && fn is >= 1 and <= 24)
+                {
+                    virtualKey = (uint)(0x70 + fn - 1);
+                }
+                else
+                {
+                    return false;
+                }
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        return virtualKey != 0;
     }
 }

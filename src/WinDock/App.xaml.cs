@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Threading;
 using WinDock.Core;
 using WinDock.Core.Interfaces;
+using WinDock.Core.Models;
 using WinDock.Core.Native;
 using WinDock.Core.Services;
 using WinDock.Services;
@@ -30,6 +31,12 @@ public partial class App : Application
     private TrayService? _tray;
     private MainWindow? _dock;
 
+    // 6.7 多显示器：副屏 Dock 实例（每屏一条，常驻显示，不参与自动隐藏/热区）。
+    private readonly List<SecondaryDock> _extraDocks = new();
+    private string _extraDockSignature = "";
+    private IIconService? _iconsCache;
+    private IAppLauncher? _launcherCache;
+
     /// <summary>设置窗口进程 PID 集合；用于在其全部退出后解除 Dock 的自动隐藏抑制。</summary>
     private readonly HashSet<int> _settingsPids = new();
     private readonly object _settingsLock = new();
@@ -52,6 +59,9 @@ public partial class App : Application
     // M2 第五批：本地性能打点与 CPU 突发归因（WD-033）
     private IMetricsService? _metrics;
 
+    // 6.13 模式 A：系统托盘溢出面板检测（3s 一次 FindWindow）
+    private DispatcherTimer? _overflowWatch;
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
@@ -66,6 +76,25 @@ public partial class App : Application
             // 自动隐藏窗口（18:00 实机），因此不能只广播。
             PostToDockHosts("WinDock.RequestExit.v1");
             Shutdown(0);
+            return;
+        }
+
+        if (Array.Exists(e.Args,
+                a => string.Equals(a, "--elevate", StringComparison.OrdinalIgnoreCase)))
+        {
+            // R5「以管理员重启 Dock」的引导进程：普通权限运行，只做三件事——
+            // 请求现有实例优雅退出 → 等它释放单实例互斥 → 以 runas 拉起新实例。
+            // 反过来做（先提权启动）新实例会撞互斥直接退出，所以顺序不能换。
+            _log = new LogService();
+            Loc.Instance.SetLanguage("zh-CN");
+            PostToDockHosts("WinDock.RequestExit.v1");
+            if (!ElevationService.WaitForOtherInstances(TimeSpan.FromSeconds(8)))
+            {
+                _log.Warn("App", "提权重启前等待旧实例退出超时，仍尝试启动新实例");
+            }
+
+            bool ok = ElevationService.StartSelfElevated(_log);
+            Shutdown(ok ? 0 : 1);
             return;
         }
 
@@ -107,6 +136,18 @@ public partial class App : Application
             return;
         }
 
+        // 自检必须在单实例互斥**之前**处理：否则 Dock 正在运行时 `--selftest`
+        // 会被互斥分支直接 Shutdown(0)，一条断言都没跑却返回 0，形成"自检假通过"
+        // （2026-11-10 实测：结果文件停在上一版，误以为新断言已通过）。
+        if (Array.Exists(e.Args,
+                a => string.Equals(a, "--selftest", StringComparison.OrdinalIgnoreCase)))
+        {
+            _log = new LogService();
+            Loc.Instance.SetLanguage("zh-CN");
+            Shutdown(SelfTest.Run(_log));
+            return;
+        }
+
         _mutex = new Mutex(initiallyOwned: true, MutexName, out bool createdNew);
         if (!createdNew)
         {
@@ -120,13 +161,6 @@ public partial class App : Application
         DispatcherUnhandledException += OnDispatcherUnhandledException;
         AppDomain.CurrentDomain.UnhandledException += OnDomainUnhandledException;
         TaskScheduler.UnobservedTaskException += OnUnobservedTaskException;
-
-        if (Array.Exists(e.Args,
-                a => string.Equals(a, "--selftest", StringComparison.OrdinalIgnoreCase)))
-        {
-            Shutdown(SelfTest.Run(_log));
-            return;
-        }
 
         _config = new ConfigService(_log);
         Loc.Instance.SetLanguage(_config.Current.General.Language);
@@ -155,8 +189,10 @@ public partial class App : Application
         // WD-018：磁盘缓存按配置开关注入；关闭时退化为 M1 的纯内存缓存。
         IIconService icons = new IconService(_log,
             _config.Current.Behavior.IconCacheEnabled ? new IconCache(_log) : null);
+        _iconsCache = icons;
         _animation = new AnimationEngine();
         IAppLauncher launcher = new AppLauncher(_log, _metrics);
+        _launcherCache = launcher;
         _preview = new PreviewService(_log);
         _guide = new StartupGuide(_config, _log);
         IDockDragService drag = new DockDragService(_config, _log);
@@ -192,6 +228,7 @@ public partial class App : Application
         _enumerator.Start();
         _dock.RefreshItems();
         _dock.Show(); // 触发 SourceInitialized → 注册 Ctrl+Alt+D
+        ApplyExtraDocks(_config.Current); // 6.7 每屏一条 Dock（可选）
         _metrics?.Mark("startup.first_show");
         _tray.ApplyConfig(_config.Current);
         StartupRegistry.Apply(_config.Current.General.LaunchAtStartup, _log);
@@ -201,6 +238,31 @@ public partial class App : Application
         _watchdog = new WatchdogService(_log, _timers, _metrics);
         _watchdog.ApplyConfig(_config.Current);
         _tray?.NotifyRecovery(); // 上次异常退出由看门狗留下的提示，读完即删
+
+        // R9：启动时检测第三方任务栏美化工具（StartAllBack 等）并提示一次。
+        // 只提示、不自动改用户设置；扫描要枚举上千条卸载项，放后台线程避免拖慢启动，
+        // 检测本身失败也绝不阻断启动。
+        Task.Run(ConflictDetector.Detect).ContinueWith(task =>
+        {
+            if (task.Status != TaskStatus.RanToCompletion)
+            {
+                _log?.Warn("App", "第三方美化工具检测失败：" + task.Exception?.GetBaseException().Message);
+                return;
+            }
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try
+                {
+                    _tray?.NotifyConflicts(task.Result);
+                }
+                catch (Exception ex)
+                {
+                    // 退出竞态期间托盘可能已销毁，提示失败不影响任何功能。
+                    _log?.Warn("App", "冲突提示失败：" + ex.Message);
+                }
+            }));
+        }, TaskScheduler.Default);
 
         if (_guide?.ShouldShow(_config.Current) == true)
         {
@@ -278,11 +340,14 @@ public partial class App : Application
             _log?.Error("App", "退出时恢复任务栏失败", ex);
         }
 
+        CloseExtraDocks();
         _watchdog?.Stop();    // 先发 S 帧，避免看门狗把正常退出误判为崩溃
         _watchdog?.Dispose();
         _autoHide?.Dispose();
         _preview?.Dispose(); // FR-404：退出时兜底注销全部 DWM 缩略图句柄
         _fullScreen?.Dispose();
+        _overflowWatch?.Stop();
+        _overflowWatch = null;
         _hotkey?.Dispose();
         _hotZone?.Dispose();
         _timers?.Dispose();
@@ -304,6 +369,102 @@ public partial class App : Application
         base.OnExit(e);
     }
 
+    /// <summary>
+    /// 6.7 多显示器：按配置为「除主 Dock 所在屏之外」的每块屏各开一条 Dock。
+    /// 副屏 Dock 常驻显示（不绑定自动隐藏/热区），避免两条热区在同一屏幕边缘互相抢事件；
+    /// 位置、尺寸、透明度仍与主 Dock 共享同一份配置，因此视觉完全一致。
+    /// </summary>
+    private void ApplyExtraDocks(DockConfig config)
+    {
+        if (_dock is null || _config is null || _iconsCache is null || _launcherCache is null)
+        {
+            return;
+        }
+
+        if (!config.Dock.PerMonitorDocks)
+        {
+            if (_extraDocks.Count > 0)
+            {
+                CloseExtraDocks();
+                _log?.Info("App", "多屏 Dock 已关闭（perMonitorDocks=false）");
+            }
+
+            _extraDockSignature = "";
+            return;
+        }
+
+        IReadOnlyList<DisplayMonitor> monitors = MonitorService.GetMonitors();
+        string primaryId = config.Dock.MonitorIds?.FirstOrDefault() ?? "primary";
+        int primaryIndex = -1;
+        for (int i = 0; i < monitors.Count; i++)
+        {
+            if (monitors[i].IsPrimary)
+            {
+                primaryIndex = i;
+                break;
+            }
+        }
+
+        int primaryDockIndex = primaryId == "primary" || !int.TryParse(primaryId, out int parsed)
+            ? primaryIndex
+            : parsed - 1;
+
+        var wanted = new List<string>();
+        for (int i = 0; i < monitors.Count; i++)
+        {
+            if (i == primaryDockIndex)
+            {
+                continue;
+            }
+
+            wanted.Add((i + 1).ToString()); // ResolveWorkArea 的编号从 1 开始
+        }
+
+        string signature = string.Join(",", wanted);
+        if (string.Equals(signature, _extraDockSignature, StringComparison.Ordinal))
+        {
+            foreach (SecondaryDock dock in _extraDocks)
+            {
+                dock.Dock.ApplyConfig(config); // 保留同一批窗口，只热更新配置
+            }
+
+            return;
+        }
+
+        CloseExtraDocks();
+        _extraDockSignature = signature;
+        foreach (string monitorId in wanted)
+        {
+            var animation = new AnimationEngine();
+            var window = new MainWindow(_config, _log!, _taskbar!, _enumerator!, _iconsCache,
+                animation, _launcherCache, _metrics, monitorId);
+            window.Show();
+            _extraDocks.Add(new SecondaryDock(window, animation));
+            _log?.Info("App", $"已在显示器 {monitorId} 上创建副屏 Dock");
+        }
+    }
+
+    private void CloseExtraDocks()
+    {
+        foreach (SecondaryDock dock in _extraDocks)
+        {
+            try
+            {
+                dock.Dock.CloseForShutdown();
+                dock.Animation.Dispose();
+            }
+            catch (InvalidOperationException)
+            {
+                // 窗口已关闭
+            }
+        }
+
+        _extraDocks.Clear();
+        _extraDockSignature = "";
+    }
+
+    private sealed record SecondaryDock(MainWindow Dock, IAnimationEngine Animation);
+
     private void OnConfigChanged(object? sender, ConfigChangedEventArgs args)
     {
         // ConfigService 的 FileSystemWatcher 回调在线程池 Timer 线程上，
@@ -320,6 +481,7 @@ public partial class App : Application
         _autoHide?.ApplyConfig(args.Config);
         _hotkey?.ApplyConfig(args.Config);
         _watchdog?.ApplyConfig(args.Config); // 开关 / 失联阈值热更新
+        ApplyExtraDocks(args.Config);        // 6.7 多屏 Dock 随配置增减
         ApplyTaskbarMode();                   // WD-025：共存模式切换即时生效
         if (_log is not null)
         {
@@ -346,23 +508,98 @@ public partial class App : Application
         {
             if (string.Equals(mode, "replace", StringComparison.OrdinalIgnoreCase))
             {
+                _taskbar.ApplyCompactMode(false); // 模式 A 不需要精简原生任务栏
                 bool ok = _taskbar.Hide();
                 _log?.Info("App", ok
                     ? "任务栏模式=替换：已隐藏原生任务栏"
                     : "任务栏模式=替换：隐藏失败，已保持共存（安全回退）");
             }
+            else if (string.Equals(mode, "coexist", StringComparison.OrdinalIgnoreCase))
+            {
+                _taskbar.Restore();
+                // 6.13 模式 B：原生任务栏只留托盘区（隐藏搜索/任务视图/小组件/聊天）
+                _taskbar.ApplyCompactMode(true);
+                _log?.Info("App", "任务栏模式=精简共存：保留原生任务栏（托盘区）");
+            }
             else
             {
                 _taskbar.Restore();
-                _log?.Info("App", string.Equals(mode, "coexist", StringComparison.OrdinalIgnoreCase)
-                    ? "任务栏模式=精简共存：保留原生任务栏（托盘区）"
-                    : "任务栏模式=仅美化：保留原生任务栏");
+                _taskbar.ApplyCompactMode(false);
+                _log?.Info("App", "任务栏模式=仅美化：保留原生任务栏");
             }
         }
         catch (Exception ex)
         {
             _log?.Error("App", "应用任务栏共存模式失败", ex);
             _taskbar.Restore();
+        }
+
+        // 6.13：模式 A 下原生任务栏被隐藏，系统托盘随之不可用。
+        // 用户一旦打开"溢出面板"，提示切到模式 B（精简共存，保留托盘区）。
+        if (string.Equals(mode, "replace", StringComparison.OrdinalIgnoreCase))
+        {
+            StartOverflowWatch();
+        }
+        else
+        {
+            _overflowWatch?.Stop();
+        }
+    }
+
+    /// <summary>
+    /// 6.13 托盘溢出面板检测：3s 一次 FindWindow（开销可忽略），命中即提示并停止。
+    /// 只在模式 A 下启动，避免不必要的轮询。
+    /// </summary>
+    private void StartOverflowWatch()
+    {
+        if (_overflowWatch is not null)
+        {
+            if (!_overflowWatch.IsEnabled)
+            {
+                _overflowWatch.Start();
+            }
+
+            return;
+        }
+
+        _overflowWatch = new DispatcherTimer(DispatcherPriority.Background)
+        {
+            Interval = TimeSpan.FromSeconds(3),
+        };
+        _overflowWatch.Tick += (_, _) =>
+        {
+            bool open = NativeMethods.FindWindowW("TopLevelWindowForOverflowXamlIsland", null) != IntPtr.Zero
+                        || NativeMethods.FindWindowW("NotifyIconOverflowWindow", null) != IntPtr.Zero;
+            if (!open)
+            {
+                return;
+            }
+
+            _overflowWatch?.Stop();
+            _log?.Info("App", "检测到系统托盘溢出面板：提示切换到精简共存模式");
+            _tray?.NotifyTrayOverflow(SwitchToCoexistMode);
+        };
+        _overflowWatch.Start();
+    }
+
+    /// <summary>气泡点击：从模式 A 切到模式 B（保留原生任务栏托盘区）。</summary>
+    private void SwitchToCoexistMode()
+    {
+        try
+        {
+            if (_config is null)
+            {
+                return;
+            }
+
+            DockConfig config = _config.Current;
+            config.General.TaskbarMode = "coexist";
+            _config.Save(config); // 触发 OnConfigChanged → ApplyTaskbarMode
+            _log?.Info("App", "已切换到精简共存模式（保留系统托盘）");
+        }
+        catch (Exception ex)
+        {
+            _log?.Error("App", "切换到共存模式失败", ex);
         }
     }
 
