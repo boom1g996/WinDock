@@ -10,10 +10,12 @@
                 <TranslateTransform x:Name="Translate" X="0" Y="0" />
             </TransformGroup>
         </Grid.RenderTransform>
-        <Border x:Name="IconFrame" CornerRadius="8" Background="#14FFFFFF" ClipToBounds="True">
+        <!-- 图标框：只做圆角裁剪，不铺底色。原先的 #14FFFFFF 底会在非圆角图标外
+             多出一圈淡方块，和底下的毛玻璃叠起来显脏；macOS 的图标本身就是圆角贴图。 -->
+        <Border x:Name="IconFrame" CornerRadius="8" Background="Transparent" ClipToBounds="True">
             <Grid>
                 <Image x:Name="IconImage" Stretch="Uniform"
-                       RenderOptions.BitmapScalingMode="HighQuality" Margin="2" />
+                       RenderOptions.BitmapScalingMode="HighQuality" />
                 <!-- FR-205 悬停 +4% 亮度：白色叠加层，由 hover 动画驱动透明度 -->
                 <Border x:Name="HoverGlow" Background="White" Opacity="0" IsHitTestVisible="False" />
                 <!-- 8.4 名称常显（labelMode=always 时显示在图标内底部） -->

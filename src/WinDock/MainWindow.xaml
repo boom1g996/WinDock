@@ -23,6 +23,14 @@
                     <RowDefinition Height="Auto" />
                     <RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
+                <!-- 毛玻璃 tint 层：叠在模糊背景之上，保证图标对比度。
+                     用 Border 而不是 Rectangle —— Rect 不会被外层 Border 的圆角裁掉，
+                     会从四角溢出一圈直角色块；Border 的 Background 会按自身圆角裁剪。 -->
+                <Border x:Name="TintLayer" Grid.RowSpan="2" IsHitTestVisible="False"
+                        Background="Transparent" />
+                <!-- 磨砂颗粒：macOS 玻璃的细噪点感；由代码生成 64×64 平铺，整体透明度极低 -->
+                <Border x:Name="NoiseLayer" Grid.RowSpan="2" IsHitTestVisible="False"
+                        Background="Transparent" Opacity="0" />
                 <StackPanel x:Name="IconsPanel" Grid.Row="0" Orientation="Horizontal"
                             VerticalAlignment="Bottom" />
                 <!-- FR-101 倒影：镜像底边一小段图标，强度/高度可调（默认关闭） -->
@@ -34,9 +42,10 @@
                         </Rectangle.LayoutTransform>
                     </Rectangle>
                 </Border>
-                <!-- FR-101 底部 1px 高光 -->
-                <Border x:Name="Highlight" Grid.Row="0" Height="1" VerticalAlignment="Bottom"
-                        HorizontalAlignment="Stretch" IsHitTestVisible="False" />
+                <!-- FR-101 顶部 1px 高光：光源在上，玻璃上边缘更亮（macOS 观感）。
+                     左右内缩，避免顶到圆角处露出断头线。 -->
+                <Border x:Name="Highlight" Grid.Row="0" Height="1" VerticalAlignment="Top"
+                        Margin="14,0,14,0" IsHitTestVisible="False" />
             </Grid>
         </Border>
     </Grid>

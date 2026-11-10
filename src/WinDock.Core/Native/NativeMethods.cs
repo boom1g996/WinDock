@@ -17,12 +17,40 @@ public static partial class NativeMethods
     public const int WS_MAXIMIZE = 0x01000000;
 
     public const int DWMWA_CLOAKED = 14;
+
+    /// <summary>深色标题栏语义；Win11 上它同时决定 DWM 自动绘制的窗口边框/阴影取深色系。</summary>
+    public const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+
     public const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+
+    /// <summary>
+    /// 窗口边框颜色。默认值会让 DWM 给每个顶层窗口画一圈 1px 系统色边框，
+    /// 整窗透明的 Dock 会因此在胶囊外侧露出细线，必须显式关掉。
+    /// </summary>
+    public const int DWMWA_BORDER_COLOR = 34;
+
     public const int DWMWA_SYSTEMBACKDROP_TYPE = 38;
+
+    /// <summary>DWMWA_BORDER_COLOR 的「不画边框」哨兵值（0xFFFFFFFE）。</summary>
+    public const int DWMWA_COLOR_NONE = unchecked((int)0xFFFFFFFE);
+
+    public const int DWMSBT_AUTO = 0;
+
     public const int DWMSBT_NONE = 1;
+
+    /// <summary>Mica：采样桌面壁纸并模糊，不透明度约 90%。</summary>
     public const int DWMSBT_MAINWINDOW = 2;
+
+    /// <summary>Acrylic：实时模糊窗口背后的内容，最接近 macOS Dock 的观感。</summary>
     public const int DWMSBT_TRANSIENTWINDOW = 3;
+
+    /// <summary>Mica Alt（标签页式窗口）。</summary>
+    public const int DWMSBT_TABBEDWINDOW = 4;
+
     public const int DWMWCP_ROUND = 2;
+
+    /// <summary>角偏好：不裁圆（保留胶囊自己的圆角，避免 DWM 再裁窗口矩形）。</summary>
+    public const int DWMWCP_DONOTROUND = 1;
 
     public const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
     public const uint EVENT_SYSTEM_MINIMIZESTART = 0x0016;
@@ -63,6 +91,12 @@ public static partial class NativeMethods
 
     public const int SM_CXSCREEN = 0;
     public const int SM_CYSCREEN = 1;
+
+    /// <summary>虚拟屏幕（所有显示器并集）左上角，物理像素；副屏在左侧时为负值。</summary>
+    public const int SM_XVIRTUALSCREEN = 76;
+    public const int SM_YVIRTUALSCREEN = 77;
+    public const int SM_CXVIRTUALSCREEN = 78;
+    public const int SM_CYVIRTUALSCREEN = 79;
     public const int SM_CMONITORS = 80;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -167,6 +201,10 @@ public static partial class NativeMethods
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+    /// <summary>修改窗口样式；返回旧值（0 也可能是合法旧值，失败需看 Win32Error）。</summary>
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool EnumWindows(EnumWindowsProc lpEnumFunc, IntPtr lParam);

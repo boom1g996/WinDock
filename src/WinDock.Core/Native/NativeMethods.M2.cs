@@ -47,6 +47,9 @@ public static partial class NativeMethods
     public const uint SWP_SHOWWINDOW = 0x0040;
     public const int SW_HIDE = 0;
     public const int SW_SHOW = 5;
+
+    /// <summary>显示但不激活：恢复 Dock 时必须用它，否则会把焦点从用户当前窗口抢走。</summary>
+    public const int SW_SHOWNOACTIVATE = 4;
     public const int HWND_TOPMOST = -1;
     public const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
 

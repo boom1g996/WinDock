@@ -5,12 +5,14 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using WinDock.Controls;
 using WinDock.Core;
 using WinDock.Core.Interfaces;
 using WinDock.Core.Models;
 using WinDock.Core.Native;
+using WinDock.Core.Services;
 using WinDock.Services;
 
 namespace WinDock;
@@ -93,6 +95,15 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     private string _materialMode = "acrylic";
     private double _tintAlpha = 0.3;
 
+    /// <summary>质感：胶囊背景的自绘毛玻璃（抓屏 + 高斯模糊，模糊只落在胶囊形状内）。</summary>
+    private readonly GlassBackgroundService _glass;
+
+    /// <summary>玻璃刷新的去抖计时器：滑入/放大/换屏会连续改窗口位置，稳定后再抓屏。</summary>
+    private DispatcherTimer? _glassDebounce;
+
+    /// <summary>磨砂颗粒刷（64×64 平铺），只生成一次，进程内复用。</summary>
+    private Brush? _noiseBrush;
+
     /// <param name="monitorOverride">
     /// 6.7 多显示器：副屏 Dock 传该屏的 monitor id（"1"/"2"…）；
     /// null 表示跟随配置 Dock.MonitorIds[0]。
@@ -112,6 +123,7 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         _launcher = launcher;
         _metrics = metrics;
         _current = config.Current;
+        _glass = new GlassBackgroundService(log);
 
         _animation.Frame += OnAnimationFrame;
         Root.MouseEnter += OnRootMouseEnter;
@@ -139,6 +151,9 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             {
                 _log.Warn(Module, "倒影重建失败（已跳过本次尺寸变化）：" + ex.Message);
             }
+
+            // 胶囊尺寸变了，玻璃的抓取矩形也过期了（去抖，滑入动画期间不会抓）。
+            ScheduleGlassRefresh();
         };
 
         ApplyConfig(_current);
@@ -342,6 +357,10 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         _pointerOver = true;
         _timers?.Cancel(PreviewCloseKey); // 从预览面板移回 Dock：取消关闭倒计时
         PointerEntered?.Invoke(this, EventArgs.Empty);
+
+        // 玻璃自愈：锁屏 / 安全桌面 / 全屏独占期间抓屏会被跳过，那时停在兜底纯色。
+        // 用户一碰 Dock 就重试一次（缓存命中时会直接复用，不会重复抓屏）。
+        ScheduleGlassRefresh();
     }
 
     private void OnRootMouseLeave(object sender, MouseEventArgs e)
@@ -755,14 +774,34 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     }
 
     /// <summary>
-    /// 图标提取目标尺寸：放大倍率下图标会被 RenderTransform 放大到
-    /// IconSize×MagnifyScale，按该值（取整 + 8px 余量、上限 256）提取，
-    /// 让放大后的图标仍有足够像素、不发虚（用户反馈图标模糊）。
+    /// 图标提取目标尺寸（**物理像素**）：放大态图标在屏幕上占
+    /// <c>IconSize × MagnifyScale × DPI</c>，位图必须不小于这个数才不会二次拉伸。
     /// </summary>
+    /// <remarks>
+    /// 之前漏乘 DPI 是「图标糊」的主因之一：125% 缩放下 48px 图标实际占 60 物理像素，
+    /// 放大态要 105，而位图只按 92px 提取再拉伸。另外返回值吸附到系统图标档位
+    /// （32/48/64/128/256）—— <c>PrivateExtractIcons</c> 收到任意尺寸时也是取最接近
+    /// 的一档再缩放，直接要整档更清晰，也能减少缓存档位数量。
+    /// </remarks>
     private int RequestedIconPx()
     {
-        double need = _current.Dock.IconSize * _current.Animation.MagnifyScale + 8;
-        return (int)Math.Min(256, Math.Max(_current.Dock.IconSize, Math.Ceiling(need)));
+        DpiScale dpi = VisualTreeHelper.GetDpi(this);
+        double scale = Math.Max(dpi.DpiScaleX, dpi.DpiScaleY);
+        if (scale <= 0)
+        {
+            scale = 1.0;
+        }
+
+        double need = _current.Dock.IconSize * _current.Animation.MagnifyScale * scale + 8;
+        int px = (int)Math.Ceiling(need);
+        return px switch
+        {
+            <= 32 => 32,
+            <= 48 => 48,
+            <= 64 => 64,
+            <= 128 => 128,
+            _ => 256,
+        };
     }
 
     /// <summary>结构未变：原地更新绑定与指示点，不销毁控件、不打断 hover。</summary>
@@ -1463,6 +1502,10 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             Left = _baseLeft;
             Top = _baseTop + _slideOffset;
         }
+
+        // 窗口位置变了，胶囊相对屏幕的物理矩形也变了 → 玻璃要重抓。
+        // 滑入动画每帧都会走到这里，靠去抖收敛成"停下后抓一次"。
+        ScheduleGlassRefresh();
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
@@ -1499,6 +1542,9 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
 
         Closed += (_, _) =>
         {
+            _glassDebounce?.Stop();
+            _glassDebounce = null;
+
             if (_minimizeHook != IntPtr.Zero)
             {
                 NativeMethods.UnhookWinEvent(_minimizeHook);
@@ -1691,35 +1737,61 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         _materialMode = mode;
         double opacity = Math.Clamp(a.Opacity, 0, 1);
         // Windows 的 DWM 玻璃强度没有公开调节项（8.3/需求 4.2），
-        // 「模糊强度」落地为胶囊底色浓度：越高越厚，观感上更"磨砂"。
+        // 「模糊强度」现在真正作用于高斯半径（见 GlassBlurRadius），这里只算 tint 浓度。
         double blurFactor = a.BlurLevel switch
         {
-            "low" => 0.65,
-            "high" => 1.35,
+            "low" => 0.85,
+            "high" => 1.20,
             _ => 1.0,
         };
-        _tintAlpha = Math.Clamp(opacity * blurFactor, 0, 1);
+        // opacity 语义 = 玻璃浓度：0 仍保 18% 玻璃底（全透明就不叫玻璃了，
+        // 会退化成"图标浮在桌面上"，这正是用户反馈"看不到毛玻璃"的直接原因），
+        // 1 对应约 64%，覆盖 macOS Dock 的观感区间。旧配置里出现过度 opacity=0。
+        _tintAlpha = Math.Clamp(0.18 + (opacity * 0.46 * blurFactor), 0.18, 0.78);
 
         if (fallback.Length > 0)
         {
             _log.Info(Module, $"材质回退纯色：{fallback}（背景模式 {a.BackgroundMode} → solid）");
         }
 
+        bool opaque = string.Equals(mode, "solid", StringComparison.Ordinal);
         if (highContrast)
         {
             // 8.3：高对比度下用系统色板并保证边框对比度（不叠任何半透明）。
             Capsule.Background = SystemColors.WindowBrush;
             Capsule.BorderBrush = SystemColors.WindowTextBrush;
             Capsule.BorderThickness = new Thickness(Math.Max(1, a.BorderWidth));
+            TintLayer.Background = Brushes.Transparent;
+            NoiseLayer.Opacity = 0;
+        }
+        else if (opaque)
+        {
+            Capsule.Background = new SolidColorBrush(Color.FromArgb(255, 0x1C, 0x1C, 0x1E));
+            Capsule.BorderBrush = ParseBorderBrush(a.BorderColor);
+            Capsule.BorderThickness = new Thickness(a.BorderWidth);
+            TintLayer.Background = Brushes.Transparent;
+            NoiseLayer.Opacity = 0;
         }
         else
         {
-            Capsule.Background = CreateCapsuleBrush(mode, _tintAlpha);
+            // 毛玻璃：先铺一层"厚 tint"兜底 —— 抓屏失败（全屏独占 / UAC 安全桌面 /
+            // 旧系统不支持截屏排除）时会停在这里，视觉上仍是可用的半透明深色胶囊。
+            // 抓屏成功后 UpdateGlassBackground 把它换成「模糊位图 + 薄 tint」。
+            Capsule.Background = new SolidColorBrush(
+                ResolveCapsuleTint(Math.Clamp(_tintAlpha + 0.22, 0.30, 0.92)));
             Capsule.BorderBrush = ParseBorderBrush(a.BorderColor);
             Capsule.BorderThickness = new Thickness(a.BorderWidth);
+            TintLayer.Background = Brushes.Transparent;
+            NoiseLayer.Background = NoiseBrush();
+            NoiseLayer.Opacity = 0.06;
         }
 
         Capsule.CornerRadius = new CornerRadius(d.CornerRadius);
+        // 内层 tint / 噪点比外层圆角小一个描边宽度：叠在一起时才不会在四角
+        // 露出 1px 的直角色块（Border 只按自己的圆角裁背景）。
+        var innerRadius = new CornerRadius(Math.Max(0, d.CornerRadius - a.BorderWidth));
+        TintLayer.CornerRadius = innerRadius;
+        NoiseLayer.CornerRadius = innerRadius;
         Capsule.Padding = new Thickness(
             d.Padding, d.Padding, d.Padding, d.Padding + 8);
 
@@ -1742,24 +1814,86 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
 
         ApplyIconAccent();
         ApplyBackdrop();
+        // 材质/尺寸/位置都可能变了，玻璃需要重抓（去抖，避免布局期反复抓屏）。
+        ScheduleGlassRefresh(force: true);
     }
 
-    /// <summary>按背景模式生成胶囊底色；none 只留边框，solid 为不透明纯色。</summary>
-    private SolidColorBrush CreateCapsuleBrush(string mode, double tintAlpha)
+    /// <summary>
+    /// 胶囊的 tint 色：深色主题近黑、浅色主题近白（macOS Dock 在浅色下是半透明白）。
+    /// </summary>
+    /// <remarks>
+    /// 只读 HKCU 的 <c>SystemUsesLightTheme</c>，不写、不触发设置变更广播。
+    /// 读取失败一律按深色处理（默认主题）。
+    /// </remarks>
+    private static Color ResolveCapsuleTint(double alpha)
     {
-        switch (mode)
+        byte a = (byte)Math.Round(Math.Clamp(alpha, 0, 1) * 255);
+        bool light;
+        try
         {
-            case "none":
-                return Brushes.Transparent;
-            case "solid":
-                return new SolidColorBrush(Color.FromArgb(255, 0x1C, 0x1C, 0x1E));
-            default:
-                // acrylic / mica / image：统一用带透明度 tint 让 DWM 玻璃或图片透上来。
-                // （image 模式的落盘图片在 v1 未纳入配置 schema，按 acrylic 渲染并已在文档登记。）
-                return new SolidColorBrush(
-                    Color.FromArgb((byte)Math.Round(tintAlpha * 255), 0x14, 0x14, 0x18));
+            light = NativeMethods.ReadDword(
+                @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
+                "SystemUsesLightTheme") == 1;
         }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception
+                                       or ArgumentException or InvalidOperationException)
+        {
+            light = false;
+        }
+
+        return light
+            ? Color.FromArgb(a, 0xF2, 0xF5, 0xFA)
+            : Color.FromArgb(a, 0x0E, 0x10, 0x16);
     }
+
+    /// <summary>
+    /// 磨砂颗粒：64×64 随机灰度、低 alpha，平铺在胶囊上给玻璃一点"纸面颗粒"。
+    /// 大面积半透明如果不加颗粒，看起来会像"一块塑料板"而不是磨砂玻璃。
+    /// 只生成一次并冻结，进程内复用。
+    /// </summary>
+    private Brush NoiseBrush()
+    {
+        if (_noiseBrush is not null)
+        {
+            return _noiseBrush;
+        }
+
+        const int size = 64;
+        int stride = size * 4;
+        var pixels = new byte[stride * size];
+        var random = new Random(20261110); // 固定种子：每次运行颗粒一致，避免"闪烁感"
+        for (int i = 0; i < pixels.Length; i += 4)
+        {
+            byte v = (byte)random.Next(0, 256);
+            pixels[i] = v;     // B
+            pixels[i + 1] = v; // G
+            pixels[i + 2] = v; // R
+            pixels[i + 3] = (byte)random.Next(20, 64);
+        }
+
+        BitmapSource bitmap = BitmapSource.Create(size, size, 96, 96,
+            PixelFormats.Bgra32, null, pixels, stride);
+        bitmap.Freeze();
+
+        var brush = new ImageBrush(bitmap)
+        {
+            TileMode = TileMode.Tile,
+            ViewportUnits = BrushMappingMode.Absolute,
+            Viewport = new Rect(0, 0, size, size),
+            Stretch = Stretch.Fill,
+        };
+        brush.Freeze();
+        _noiseBrush = brush;
+        return brush;
+    }
+
+    /// <summary>模糊半径（物理像素）：模糊强度档位真正作用在这里，不再只影响底色浓度。</summary>
+    private double GlassBlurRadius() => _current.Appearance.BlurLevel switch
+    {
+        "low" => 12,
+        "high" => 34,
+        _ => 22,
+    };
 
     private static System.Windows.Media.Effects.DropShadowEffect? CreateShadowEffect(string level)
     {
@@ -1883,6 +2017,18 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     ///   5. mica 模式改为 DWMWA_SYSTEMBACKDROP_TYPE=MAINWINDOW（需求 4.2 的官方 Mica）。
     /// 必须在 Loaded（窗口已上屏）后调用，SourceInitialized 时 DWM 会拒绝。
     /// </summary>
+    /// <summary>
+    /// 把窗口做成「真·毛玻璃」。
+    /// </summary>
+    /// <remarks>
+    /// 关键教训：<c>DwmExtendFrameIntoClientArea(-1)</c> 只负责「让客户区可以透出 DWM 的
+    /// backdrop」，它**本身不产生任何模糊**。在 Win10/11 上如果同时把
+    /// <c>DWMWA_SYSTEMBACKDROP_TYPE</c> 设成 <c>DWMSBT_NONE</c>，透出来的就是未模糊的
+    /// 桌面（多数机器上因为合成链路退化成黑色/灰色），观感就是「一块半透明灰板」——
+    /// 用户反复反馈「看不到毛玻璃」的根因就在这里。
+    /// 要得到模糊必须显式指定 backdrop 类型：Acrylic 实时模糊背后窗口内容（最接近 macOS
+    /// Dock），Mica 采样壁纸。因此 acrylic / image → TRANSIENTWINDOW，mica → MAINWINDOW。
+    /// </remarks>
     private void ApplyBackdrop()
     {
         IntPtr handle = new WindowInteropHelper(this).Handle;
@@ -1910,7 +2056,8 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             return;
         }
 
-        // 整窗扩展为玻璃边框（负值覆盖整个客户区）：Win11 下整窗透出模糊桌面。
+        // 整窗扩展为玻璃边框（负值覆盖整个客户区）：客户区由此交给 DWM 合成，
+        // WPF 不画底色的地方会露出 backdrop（真模糊由下面的 SYSTEMBACKDROP_TYPE 决定）。
         var margins = new NativeMethods.MARGINS
         {
             cxLeftWidth = -1,
@@ -1924,23 +2071,160 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             _log.Warn(Module, $"DwmExtendFrameIntoClientArea 失败 HRESULT=0x{hr:X8}");
         }
 
-        // 6.10 材质：mica 走官方系统背景类型，其余模式关掉系统 backdrop 只留整窗玻璃。
-        int backdrop = string.Equals(_materialMode, "mica", StringComparison.Ordinal)
-            ? NativeMethods.DWMSBT_MAINWINDOW
-            : NativeMethods.DWMSBT_NONE;
-        int backdropResult = NativeMethods.DwmSetWindowAttribute(handle,
-            NativeMethods.DWMWA_SYSTEMBACKDROP_TYPE, ref backdrop, sizeof(int));
-        if (backdropResult != 0
-            && string.Equals(_materialMode, "mica", StringComparison.Ordinal))
+        // 深色语义：让 DWM 自动绘制的窗口边框/阴影走深色系，与胶囊一致。
+        int dark = 1;
+        NativeMethods.DwmSetWindowAttribute(handle,
+            NativeMethods.DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, sizeof(int));
+
+        // 关掉 DWM 的 1px 系统边框。不关的话整窗透明的窗口在胶囊外侧会露出一圈细线，
+        // 观感上像「Dock 下面压了一条黑边」。
+        int noBorder = NativeMethods.DWMWA_COLOR_NONE;
+        int borderResult = NativeMethods.DwmSetWindowAttribute(handle,
+            NativeMethods.DWMWA_BORDER_COLOR, ref noBorder, sizeof(int));
+        if (borderResult != 0)
         {
-            // Win11 21H2 无该属性：Mica 降级为整窗玻璃（已在文档登记）。
-            _log.Info(Module, $"Mica 不可用 HRESULT=0x{backdropResult:X8}，降级为整窗玻璃");
+            _log.Info(Module, $"DWMWA_BORDER_COLOR 不支持 HRESULT=0x{borderResult:X8}（旧版本系统，忽略）");
         }
+
+        ApplySystemBackdrop(handle);
 
         // DWM 圆角：胶囊四角由 DWM 裁圆，配合玻璃得到 macOS 风格。
         int corner = NativeMethods.DWMWCP_ROUND;
         NativeMethods.DwmSetWindowAttribute(handle, NativeMethods.DWMWA_WINDOW_CORNER_PREFERENCE,
             ref corner, sizeof(int));
+    }
+
+    /// <summary>
+    /// 关闭 DWM 系统 backdrop。
+    /// </summary>
+    /// <remarks>
+    /// <c>DWMWA_SYSTEMBACKDROP_TYPE</c>（Acrylic/Mica）作用于**整个窗口矩形**，而本窗口比
+    /// 胶囊大一圈（左右各约 28px、上方约 48px，用于容纳图标放大溢出与阴影）。一旦打开，
+    /// 胶囊外侧会露出一整块矩形雾 —— 比不加更难看，且形状无法裁剪。
+    /// 因此真模糊改由 <see cref="GlassBackgroundService"/> 在胶囊形状内自绘，
+    /// 系统 backdrop 恒为 NONE；<c>DwmExtendFrameIntoClientArea</c> 只用于让客户区可透明。
+    /// </remarks>
+    private void ApplySystemBackdrop(IntPtr handle)
+    {
+        int value = NativeMethods.DWMSBT_NONE;
+        // 失败只可能是 Win11 21H2 之前没有该属性，默认行为本就是"不画 backdrop"，可忽略。
+        NativeMethods.DwmSetWindowAttribute(handle,
+            NativeMethods.DWMWA_SYSTEMBACKDROP_TYPE, ref value, sizeof(int));
+    }
+
+    /// <summary>
+    /// 安排一次玻璃重建。滑入/放大/换屏会连续改窗口位置与尺寸，
+    /// 用去抖把这一串变化收敛成一次抓屏。
+    /// </summary>
+    private void ScheduleGlassRefresh(bool force = false)
+    {
+        if (force)
+        {
+            _glass.Invalidate();
+        }
+
+        if (_glassDebounce is null)
+        {
+            _glassDebounce = new DispatcherTimer(DispatcherPriority.Background)
+            {
+                Interval = TimeSpan.FromMilliseconds(220),
+            };
+            _glassDebounce.Tick += (_, _) =>
+            {
+                _glassDebounce?.Stop();
+                UpdateGlassBackground();
+            };
+        }
+
+        _glassDebounce.Stop();
+        _glassDebounce.Start();
+    }
+
+    /// <summary>
+    /// 抓取胶囊背后的屏幕画面并模糊，作为胶囊背景；模糊严格落在胶囊形状内。
+    /// </summary>
+    /// <remarks>
+    /// 坐标全程用物理像素：<c>BitBlt</c> 抓的是物理像素，而 WPF 布局是 DIP，
+    /// 因此「窗口物理位置（GetWindowRect）+ 胶囊相对窗口的 DIP 偏移 × 本窗 DPI」。
+    /// 不用 <c>PointToScreen</c> —— 实测它对 Dock 窗口有系统性偏移（记忆：-164,-247）。
+    /// 抓取区域向四周外扩 <c>blur + 4</c> 作为模糊过渡，并与虚拟屏幕求交，
+    /// 避免贴边 Dock 抓到屏幕外的未定义像素。
+    /// </remarks>
+    private void UpdateGlassBackground()
+    {
+        if (SystemParameters.HighContrast
+            || string.Equals(_materialMode, "solid", StringComparison.Ordinal)
+            || !_glass.IsAvailable)
+        {
+            return;
+        }
+
+        IntPtr handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero || Capsule.ActualWidth < 1 || Capsule.ActualHeight < 1)
+        {
+            return;
+        }
+
+        if (!NativeMethods.GetWindowRect(handle, out NativeMethods.RECT windowRect))
+        {
+            return;
+        }
+
+        DpiScale dpi = VisualTreeHelper.GetDpi(this);
+        Point origin = Capsule.TranslatePoint(new Point(0, 0), this);
+
+        int cx = windowRect.Left + (int)Math.Round(origin.X * dpi.DpiScaleX);
+        int cy = windowRect.Top + (int)Math.Round(origin.Y * dpi.DpiScaleY);
+        int cw = (int)Math.Round(Capsule.ActualWidth * dpi.DpiScaleX);
+        int ch = (int)Math.Round(Capsule.ActualHeight * dpi.DpiScaleY);
+        if (cw <= 0 || ch <= 0)
+        {
+            return;
+        }
+
+        double radiusPx = GlassBlurRadius() * dpi.DpiScaleX;
+        int pad = (int)Math.Ceiling(radiusPx) + 4;
+
+        int virtualLeft = NativeMethods.GetSystemMetrics(NativeMethods.SM_XVIRTUALSCREEN);
+        int virtualTop = NativeMethods.GetSystemMetrics(NativeMethods.SM_YVIRTUALSCREEN);
+        int virtualWidth = NativeMethods.GetSystemMetrics(NativeMethods.SM_CXVIRTUALSCREEN);
+        int virtualHeight = NativeMethods.GetSystemMetrics(NativeMethods.SM_CYVIRTUALSCREEN);
+
+        int grabLeft = Math.Max(virtualLeft, cx - pad);
+        int grabTop = Math.Max(virtualTop, cy - pad);
+        int grabRight = Math.Min(virtualLeft + virtualWidth, cx + cw + pad);
+        int grabBottom = Math.Min(virtualTop + virtualHeight, cy + ch + pad);
+        if (grabRight <= grabLeft || grabBottom <= grabTop)
+        {
+            return;
+        }
+
+        BitmapSource? blurred = _glass.Render(handle, grabLeft, grabTop,
+            grabRight - grabLeft, grabBottom - grabTop, radiusPx);
+        if (blurred is null)
+        {
+            // 抓屏不可用（全屏独占 / 旧系统）：停在 ApplyMaterial 铺的厚 tint 上。
+            _log.Info(Module, "玻璃背景抓屏不可用，胶囊回退半透明纯色");
+            return;
+        }
+
+        var brush = new ImageBrush(blurred)
+        {
+            Stretch = Stretch.Fill,
+            AlignmentX = AlignmentX.Left,
+            AlignmentY = AlignmentY.Top,
+            ViewboxUnits = BrushMappingMode.Absolute,
+            Viewbox = new Rect(cx - grabLeft, cy - grabTop, cw, ch),
+        };
+        brush.Freeze();
+
+        Capsule.Background = brush;
+        // 薄 tint 叠在模糊图上：太少图标会糊在背景里，太多就成了深色板。
+        TintLayer.Background = new SolidColorBrush(ResolveCapsuleTint(_tintAlpha));
+
+        // 抓屏期间窗口被 SW_HIDE 过：WPF 的呈现目标会停摆，SW_SHOW 之后
+        // 不一定自己重绘（实测表现为"窗口可见但画面空白"），这里强制一帧。
+        InvalidateVisual();
     }
 
     private void OnLoaded(object? sender, RoutedEventArgs e) => ApplyBackdrop();

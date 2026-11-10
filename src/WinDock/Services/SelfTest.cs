@@ -582,6 +582,24 @@ public static class SelfTest
                 Check("系统强调色恒为不透明色",
                     (NativeMethods.GetSystemAccentArgb() & 0xFF000000u) == 0xFF000000u);
 
+                // 质感：自绘毛玻璃服务的边界行为（不真的抓屏）
+                var glass = new WinDock.Core.Services.GlassBackgroundService(log);
+                Check("毛玻璃服务：无窗口句柄时安全返回空", glass.IsAvailable
+                    && glass.Render(IntPtr.Zero, 0, 0, 200, 100, 20) is null);
+                Check("毛玻璃服务：非法尺寸安全返回空（不抛异常）",
+                    glass.Render(new IntPtr(1), 0, 0, 0, 0, 20) is null
+                    && glass.Render(new IntPtr(1), 0, 0, -5, 10, 20) is null);
+                glass.Invalidate();
+                Check("毛玻璃服务：Invalidate 后仍可用", glass.IsAvailable);
+
+                // 全屏误判：桌面 / 任务栏类名必须被排除（按 Win+D 回桌面时
+                // Progman 铺满整屏，曾被判成"独占全屏" → Dock 永久隐藏）。
+                Check("全屏判定排除 shell 桌面窗口（Progman/WorkerW/任务栏）",
+                    WinDock.Core.Services.FullScreenDetector.IsShellWindowClass("Progman")
+                    && WinDock.Core.Services.FullScreenDetector.IsShellWindowClass("WorkerW")
+                    && WinDock.Core.Services.FullScreenDetector.IsShellWindowClass("Shell_TrayWnd")
+                    && !WinDock.Core.Services.FullScreenDetector.IsShellWindowClass("Chrome_WidgetWin_1"));
+
                 // 6.7：默认不让每块屏都开 Dock（与 macOS 一致）
                 Check("每屏一条 Dock 默认关闭", !new DockConfig().Dock.PerMonitorDocks);
 

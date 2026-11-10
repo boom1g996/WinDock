@@ -22,3 +22,6 @@ logs/
 
 # WorkBuddy workspace data (local memory / session artifacts)
 .workbuddy/
+
+# 本地临时抓屏/探测脚本（Python ctypes）
+.test/

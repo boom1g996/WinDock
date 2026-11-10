@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using WinDock.Core.Interfaces;
 using static WinDock.Core.Native.NativeMethods;
@@ -25,6 +26,27 @@ public sealed class FullScreenDetector : IFullScreenDetector
     private const int PollBaseMs = 3000;
     private const int PollMaxMs = 12000;
 
+    /// <summary>
+    /// shell 自身的窗口：它们天然铺满屏幕，但代表的是「没有前台应用」而不是
+    /// 「有应用在全屏播放」。
+    /// </summary>
+    /// <remarks>
+    /// 实机 bug（2026-11-10）：按 Win+D 回到桌面后，前台窗口变成 <c>Progman</c>，
+    /// 它没有 <c>WS_MAXIMIZE</c> 又铺满整屏 → 被判成独占全屏 → Dock 立刻隐藏、
+    /// 热区被禁用，用户之后用鼠标怎么划都唤不回来（只剩物理热键能救）。
+    /// 桌面/任务栏/托盘溢出面板必须排除。
+    /// </remarks>
+    private static readonly HashSet<string> ShellWindowClasses = new(StringComparer.Ordinal)
+    {
+        "Progman",
+        "WorkerW",
+        "Shell_TrayWnd",
+        "Shell_SecondaryTrayWnd",
+        "NotifyIconOverflowWindow",
+        "TopLevelWindowForOverflowXamlIsland",
+        "MultitaskingViewFrame",
+    };
+
     private readonly ILogService _log;
     private readonly IMetricsService? _metrics;
     private readonly SynchronizationContext? _uiContext;
@@ -46,6 +68,9 @@ public sealed class FullScreenDetector : IFullScreenDetector
     }
 
     public event EventHandler<bool>? StateChanged;
+
+    /// <summary>该类名是否属于 shell 自身窗口（桌面/任务栏/托盘溢出），不算全屏应用。</summary>
+    public static bool IsShellWindowClass(string className) => ShellWindowClasses.Contains(className);
 
     public bool IsFullScreen { get; private set; }
 
@@ -151,7 +176,15 @@ public sealed class FullScreenDetector : IFullScreenDetector
     private bool ForegroundCoversMonitor()
     {
         IntPtr foreground = GetForegroundWindow();
-        if (foreground == IntPtr.Zero || !GetWindowRect(foreground, out RECT rect))
+        if (foreground == IntPtr.Zero
+            || !IsWindowVisible(foreground)
+            || !GetWindowRect(foreground, out RECT rect))
+        {
+            return false;
+        }
+
+        // 桌面 / 任务栏等 shell 窗口不算全屏应用（按 Win+D 回桌面时必须放行）。
+        if (IsShellWindowClass(GetClassNameText(foreground)))
         {
             return false;
         }
@@ -178,6 +211,14 @@ public sealed class FullScreenDetector : IFullScreenDetector
                && rect.Top <= info.Monitor.Top + tolerance
                && rect.Right >= info.Monitor.Right - tolerance
                && rect.Bottom >= info.Monitor.Bottom - tolerance;
+    }
+
+    /// <summary>取窗口类名；失败返回空串（不命中 shell 白名单，按普通窗口处理）。</summary>
+    private static string GetClassNameText(IntPtr hwnd)
+    {
+        var buffer = new StringBuilder(256);
+        int length = GetClassName(hwnd, buffer, buffer.Capacity);
+        return length > 0 ? buffer.ToString(0, length) : string.Empty;
     }
 
     private void AddHook(uint min, uint max, uint flags)
