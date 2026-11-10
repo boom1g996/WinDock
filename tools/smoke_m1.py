@@ -18,6 +18,19 @@ from datetime import datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+
+# 必须在本进程任何 Win32 坐标调用之前设为 Per-Monitor DPI 感知。
+# 本机屏幕是 125% 缩放：DPI 不感知的进程看到的是虚拟化桌面（1792×1120），
+# 而应用（app.manifest 声明 PerMonitorV2）用的是物理坐标（2240×1400），
+# 两套坐标系差 1.25 倍——按枚举矩形（虚拟）去点应用报出的图标坐标（物理）
+# 会整体偏移，拖拽/悬停全部落空（2026-11-10 实机定位）。
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PROCESS_PER_MONITOR_DPI_AWARE
+except (AttributeError, OSError):
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except (AttributeError, OSError):
+        pass
 EXE = ROOT / "artifacts" / "WinDock-framework-dependent" / "DockHost.exe"
 RESULT = ROOT / "docs" / "M1-smoke-result.json"
 LOG_DIR = Path.home() / "AppData" / "Local" / "WinDock" / "logs"
@@ -213,6 +226,53 @@ def read_log_tail(max_lines: int = 40) -> list[str]:
         return []
     lines = files[0].read_text(encoding="utf-8", errors="replace").splitlines()
     return lines[-max_lines:]
+
+
+LAYOUT_RE = re.compile(
+    r"layout nonce=(-?\d+) win=\((-?\d+),(-?\d+),(\d+),(\d+)\)"
+    r" dip=\((-?\d+),(-?\d+)\) hwnd=\((-?\d+),(-?\d+),(-?\d+),(-?\d+)\)"
+    r" count=(\d+)(.*)")
+
+
+def dump_layout(timeout: float = 8.0) -> dict | None:
+    """让常驻实例把图标屏幕坐标写进日志后解析。
+
+    Dock 是 SizeToContent + 内容居中，窗口宽度随条目数变化，靠「窗口左边 + Npx」
+    猜图标位置必然漂移（2026-11-10 实机：x0 落在两图标之间的间隙，拖拽完全不触发）。
+    这个探针读的是控件 PointToScreen 的真实中心点。
+
+    必须带 nonce 并只认自己那次：消息投递是异步的，若直接扫最新一条布局行，
+    会读到上一次请求（甚至 Dock 滑出屏幕时）的旧坐标。
+    """
+    nonce = int(time.time() * 1000) % 1_000_000_007
+    try:
+        subprocess.run([str(EXE), f"--dump-layout={nonce}"], cwd=str(EXE.parent),
+                       capture_output=True, text=True, timeout=timeout)
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    for _ in range(16):
+        for line in reversed(read_log_tail(80)):
+            m = LAYOUT_RE.search(line)
+            if not m or int(m.group(1)) != nonce:
+                continue
+            left, top, width, height = (int(m.group(i)) for i in range(2, 6))
+            hwnd_rect = [int(m.group(i)) for i in range(8, 12)]
+            icons = []
+            for token in m.group(13).split():
+                try:
+                    index_part, rest = token.split(":", 1)
+                    name, coords = rest.rsplit("@(", 1)
+                    cx, cy = coords.rstrip(")").split(",")
+                    icons.append({"index": int(index_part), "name": name,
+                                  "center": [int(cx), int(cy)]})
+                except ValueError:
+                    continue
+            return {"rect": hwnd_rect,
+                    "wpf_rect": [left, top, left + width, top + height],
+                    "icons": icons, "nonce": nonce}
+        time.sleep(0.25)
+    return None
 
 
 def main() -> int:
@@ -427,7 +487,32 @@ def main() -> int:
 
         panel = None
         hover_point = None
-        if visible_dock:
+        layout = dump_layout() if visible_dock else None
+        if layout and any(not (0 <= icon["center"][1] <= screen_h)
+                          for icon in layout["icons"]):
+            u32.SetCursorPos(screen_w // 2, screen_h - 1)
+            time.sleep(0.9)
+            layout = dump_layout()
+        report["preview_layout"] = layout
+        if visible_dock and layout:
+            # 逐个真实图标中心悬停；固定项可能没有窗口，命中带窗口的项才弹面板。
+            # 邻域放大（FR-203）会把右侧图标顶开，未命中时重新取一次布局。
+            for attempt in range(len(layout["icons"])):
+                icon = layout["icons"][attempt]
+                x, y = icon["center"]
+                u32.SetCursorPos(x, y)
+                time.sleep(0.85)
+                panel = next((w for w in windows_of(pid)
+                              if w.get("title") == "WinDock Preview" and w["visible"]), None)
+                if panel is not None:
+                    hover_point = [x, y]
+                    report["preview_hover_icon"] = icon["name"]
+                    break
+                refreshed = dump_layout()
+                if refreshed:
+                    report["preview_layout"] = refreshed
+                    layout = refreshed
+        elif visible_dock:
             left, top, right, bottom = visible_dock[0]["rect"]
             y = bottom - max(24, min(45, (bottom - top) // 2))
             for x in range(left + 30, right - 10, 55):
@@ -494,10 +579,38 @@ def main() -> int:
             visible_dock = dock_in_screen()
         drag["dock_rect"] = visible_dock[0]["rect"] if visible_dock else None
 
-        if visible_dock:
+        layout = dump_layout() if visible_dock else None
+        if layout and any(not (0 <= icon["center"][1] <= screen_h)
+                          for icon in layout["icons"]):
+            # 探针是异步消息，期间 Dock 可能已被自动隐藏（坐标落到屏幕外）：压回热区重取
+            u32.SetCursorPos(screen_w // 2, screen_h - 1)
+            time.sleep(0.9)
+            layout = dump_layout()
+        drag["layout"] = layout
+
+        if visible_dock and layout and len(layout["icons"]) >= 2:
+            # 用真实图标中心点：第一个图标按下 → 越过两个图标后抬起（拖到第三项右侧）
+            icons = layout["icons"]
+            src = icons[0]["center"]
+            dst = icons[min(2, len(icons) - 1)]["center"]
+            y = src[1]
+            x0, x1 = src[0], dst[0] + 40
+            u32.SetCursorPos(x0, y)
+            time.sleep(0.4)
+            u32.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+            for step in range(1, 11):
+                u32.SetCursorPos(int(x0 + (x1 - x0) * step / 10), y)
+                time.sleep(0.05)
+            time.sleep(0.3)
+            u32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+            time.sleep(1.0)
+            drag["drag_points"] = [[x0, y], [x1, y]]
+            drag["drag_source_name"] = icons[0]["name"]
+        elif visible_dock:
+            # 退化路径：没有布局探针时按旧方式从窗口左边缘估算。
             left, top, right, bottom = visible_dock[0]["rect"]
             y = bottom - max(24, min(45, (bottom - top) // 2))
-            x0, x1 = left + 62, left + 62 + 125  # 第一个图标中心 → 第三个图标右侧
+            x0, x1 = left + 62, left + 62 + 125
             u32.SetCursorPos(x0, y)
             time.sleep(0.4)
             u32.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
@@ -508,6 +621,7 @@ def main() -> int:
             u32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
             time.sleep(1.0)
             drag["drag_points"] = [[x0, y], [x1, y]]
+            drag["layout_fallback"] = True
         else:
             drag["dock_not_visible"] = True
 

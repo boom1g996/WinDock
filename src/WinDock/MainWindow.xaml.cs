@@ -31,6 +31,14 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     private readonly uint _requestExitMessage =
         NativeMethods.RegisterWindowMessage("WinDock.RequestExit.v1");
 
+    /// <summary>
+    /// 自动化用的布局探针：收到消息后把每个图标的**屏幕坐标**写进日志。
+    /// 冒烟脚本不再靠「窗口左边 + 62px」这类猜测定位图标——Dock 是
+    /// SizeToContent + 内容居中，窗口宽度随条目数变化，猜测必然漂移。
+    /// </summary>
+    private readonly uint _dumpLayoutMessage =
+        NativeMethods.RegisterWindowMessage("WinDock.DumpLayout.v1");
+
     private readonly IConfigService _config;
     private readonly ILogService _log;
     private readonly ITaskbarInterop _taskbar;
@@ -914,8 +922,60 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             Dispatcher.BeginInvoke(new Action(() => Application.Current.Shutdown()));
             handled = true;
         }
+        else if (msg == unchecked((int)_dumpLayoutMessage))
+        {
+            DumpIconLayout(wParam.ToInt64());
+            handled = true;
+        }
 
         return IntPtr.Zero;
+    }
+
+    /// <summary>
+    /// 把当前图标布局写入日志，供自动化定位（不改变任何运行时状态）。
+    /// 输出形如：`layout nonce=1731 win=(l,t,w,h) dip=(l,t) hwnd=(l,t,r,b) count=3 0:Name@(x,y) ...`
+    /// nonce 由调用方透传，自动化只认自己那一次请求的行。
+    ///
+    /// 图标中心用 **Win32 窗口矩形 + 控件相对窗口的布局偏移** 计算，而不是
+    /// `Visual.PointToScreen`：本机实测 `PointToScreen` 对这个小窗口返回的原点
+    /// 比 `GetWindowRect` 偏 (164, 247)，而鼠标命中判定走的是 HWND 真实矩形，
+    /// 用 PointToScreen 定位会全部落空（2026-11-10 实机验证）。
+    /// </summary>
+    private void DumpIconLayout(long nonce)
+    {
+        try
+        {
+            DpiScale dpi = VisualTreeHelper.GetDpi(this);
+            IntPtr handle = new WindowInteropHelper(this).Handle;
+            NativeMethods.GetWindowRect(handle, out NativeMethods.RECT rect);
+            Point origin = PointToScreen(new Point(0, 0));
+
+            var parts = new List<string>(_iconControls.Count);
+            for (int i = 0; i < _iconControls.Count; i++)
+            {
+                DockIconControl control = _iconControls[i];
+                if (!control.IsLoaded || control.ActualWidth <= 0)
+                {
+                    continue;
+                }
+
+                Point local = control.TransformToAncestor(this)
+                    .Transform(new Point(control.ActualWidth / 2, control.ActualHeight / 2));
+                int cx = rect.Left + (int)Math.Round(local.X * dpi.DpiScaleX);
+                int cy = rect.Top + (int)Math.Round(local.Y * dpi.DpiScaleY);
+                parts.Add($"{i}:{control.Item.DisplayName}@({cx},{cy})");
+            }
+
+            _log.Info("Layout",
+                $"layout nonce={nonce} win=({(int)origin.X},{(int)origin.Y}," +
+                $"{(int)ActualWidth},{(int)ActualHeight}) dip=({Left:F0},{Top:F0}) " +
+                $"hwnd=({rect.Left},{rect.Top},{rect.Right},{rect.Bottom}) count={_iconControls.Count} " +
+                string.Join(' ', parts));
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("Layout", $"导出图标布局失败：{ex.Message}");
+        }
     }
 
     private void TryApplyAcrylic(DockConfig config)

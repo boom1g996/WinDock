@@ -1,0 +1,85 @@
+{
+  "timestamp": "2026-11-10T09:58:41",
+  "exe": "D:\\workspace\\W&dock\\artifacts\\WinDock-framework-dependent\\DockHost.exe",
+  "cursor_original": [
+    -686,
+    483
+  ],
+  "early_exit_code": null,
+  "pid": 8160,
+  "started_new_process": true,
+  "windows": [
+    {
+      "hwnd": 29952522,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1398,
+        2240,
+        1400
+      ],
+      "size": [
+        2240,
+        2
+      ],
+      "visible": true
+    }
+  ],
+  "visible_window_count": 1,
+  "dock_window_present": true,
+  "auto_hidden": true,
+  "hotzone_windows": [
+    {
+      "hwnd": 29952522,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1398,
+        2240,
+        1400
+      ],
+      "size": [
+        2240,
+        2
+      ],
+      "visible": true
+    }
+  ],
+  "cursor_parked": [
+    10,
+    200
+  ],
+  "settle_seconds": 10.0,
+  "cold_start_cpu_seconds": 1.125,
+  "cpu_trace_percent_per_5s": [
+    0.625,
+    0.625,
+    0.0,
+    0.938,
+    0.625,
+    0.625
+  ],
+  "sample_seconds": 30.0,
+  "idle_cpu_percent": 0.573,
+  "working_set_mb": 199.32,
+  "log_errors": [],
+  "log_tail": [
+    "[Watchdog][INFO] 2026-11-10 09:58:52.865 心跳 #4 间隔=3344ms 耗时=0.2ms",
+    "[Watchdog][INFO] 2026-11-10 09:58:56.201 心跳 #5 间隔=3344ms 耗时=0.2ms",
+    "[Watchdog][INFO] 2026-11-10 09:58:59.538 心跳 #6 间隔=3328ms 耗时=0.3ms",
+    "[Watchdog][INFO] 2026-11-10 09:59:02.876 心跳 #7 间隔=3344ms 耗时=0.2ms",
+    "[Watchdog][INFO] 2026-11-10 09:59:06.214 心跳 #8 间隔=3328ms 耗时=0.4ms",
+    "[Watchdog][INFO] 2026-11-10 09:59:09.552 心跳 #9 间隔=3343ms 耗时=0.3ms",
+    "[Metrics][INFO] 2026-11-10 09:59:12.375 summary cpu=0.0ms/s | enumerate.refresh: n=3, total=82ms, max=80ms, fullscreen.check: n=5, total=3ms, max=1ms, ui.animation_frame: n=77, total=0ms, max=0ms, ui.rebuild_icons: n=2, total=15ms, max=10ms, watchdog.heartbeat_write: n=9, total=7ms, max=4ms",
+    "[Watchdog][INFO] 2026-11-10 09:59:12.890 心跳 #10 间隔=3344ms 耗时=0.1ms",
+    "[Metrics][INFO] 2026-11-10 09:59:14.366 cpu-spike window: 31.2ms/2s → fullscreen.check×1, watchdog.heartbeat_write×1",
+    "[Watchdog][INFO] 2026-11-10 09:59:16.227 心跳 #11 间隔=3328ms 耗时=0.4ms",
+    "[Metrics][INFO] 2026-11-10 09:59:16.366 cpu-spike window: 31.2ms/2s → watchdog.heartbeat_write×1",
+    "[Watchdog][INFO] 2026-11-10 09:59:19.567 心跳 #12 间隔=3344ms 耗时=0.3ms"
+  ],
+  "log_errors_late": [],
+  "verdict": "PASS",
+  "cursor_restored": true
+}

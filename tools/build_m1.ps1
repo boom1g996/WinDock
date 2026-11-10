@@ -53,12 +53,18 @@ if ($Publish) {
     )
 
     Write-Host "==> publish: self-contained single file ($Runtime)"
+    # src/NuGet.config 刻意清空包源（日常构建完全离线），自包含发布需要
+    # Microsoft.NETCore.App.Runtime / WindowsDesktop.App.Runtime 运行时包，
+    # 因此只在这一步显式注入 nuget.org；不修改仓库内的 NuGet.config。
+    $restoreSource = 'https://api.nuget.org/v3/index.json'
     $selfContainedOk = $true
     foreach ($projectFile in $projectFiles) {
         & dotnet publish $projectFile -c $Configuration -r $Runtime --self-contained true `
             -p:PublishSingleFile=true `
             -p:IncludeNativeLibrariesForSelfExtract=true `
             -p:EnableCompressionInSingleFile=true `
+            -p:DebugType=None `
+            -p:RestoreSources=$restoreSource `
             -o $scOutput --nologo --tl:off
         if ($LASTEXITCODE -ne 0) { $selfContainedOk = $false; break }
     }

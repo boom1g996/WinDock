@@ -1,0 +1,296 @@
+{
+  "timestamp": "2026-11-10T09:57:48",
+  "exe": "D:\\workspace\\W&dock\\artifacts\\WinDock-framework-dependent\\DockHost.exe",
+  "cursor_original": [
+    -686,
+    483
+  ],
+  "early_exit_code": null,
+  "pid": 35456,
+  "started_new_process": true,
+  "windows": [
+    {
+      "hwnd": 29755914,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1398,
+        2240,
+        1400
+      ],
+      "size": [
+        2240,
+        2
+      ],
+      "visible": true
+    }
+  ],
+  "visible_window_count": 1,
+  "dock_window_present": true,
+  "auto_hidden": true,
+  "hotzone_windows": [
+    {
+      "hwnd": 29755914,
+      "class": "WinDock.HotZone.v1",
+      "title": "WinDock hot zone",
+      "rect": [
+        0,
+        1398,
+        2240,
+        1400
+      ],
+      "size": [
+        2240,
+        2
+      ],
+      "visible": true
+    }
+  ],
+  "cursor_parked": [
+    10,
+    200
+  ],
+  "settle_seconds": 6.0,
+  "cold_start_cpu_seconds": 1.609,
+  "sample_seconds": 12.0,
+  "idle_cpu_percent": 14.062,
+  "working_set_mb": 217.9,
+  "log_errors": [],
+  "log_tail": [
+    "[Watchdog][INFO] 2026-11-10 09:57:51.243 启动：宿主 pid=35456，失联阈值=10000ms",
+    "[Watchdog][INFO] 2026-11-10 09:57:51.279 心跳 #1 间隔=88819015ms 耗时=6.3ms",
+    "[Metrics][INFO] 2026-11-10 09:57:52.605 cpu-spike window: 1218.8ms/2s → ui.animation_frame×54, ui.rebuild_icons×2, enumerate.refresh×1, fullscreen.check×1, watchdog.heartbeat_write×1",
+    "[Watchdog][INFO] 2026-11-10 09:57:54.447 心跳 #2 间隔=3172ms 耗时=0.3ms",
+    "[Metrics][INFO] 2026-11-10 09:57:54.594 cpu-spike window: 125.0ms/2s → fullscreen.check×1, watchdog.heartbeat_write×1",
+    "[Watchdog][INFO] 2026-11-10 09:57:57.785 心跳 #3 间隔=3344ms 耗时=0.2ms",
+    "[Metrics][INFO] 2026-11-10 09:58:00.593 cpu-spike window: 125.0ms/2s → ui.animation_frame×28",
+    "[Watchdog][INFO] 2026-11-10 09:58:01.123 心跳 #4 间隔=3344ms 耗时=0.3ms",
+    "[Metrics][INFO] 2026-11-10 09:58:02.598 cpu-spike window: 984.4ms/2s → ui.animation_frame×15, enumerate.refresh×3, ui.rebuild_icons×2, watchdog.heartbeat_write×1",
+    "[Watchdog][INFO] 2026-11-10 09:58:04.461 心跳 #5 间隔=3328ms 耗时=0.1ms",
+    "[Metrics][INFO] 2026-11-10 09:58:04.604 cpu-spike window: 562.5ms/2s → fullscreen.check×3, enumerate.refresh×2, ui.rebuild_icons×1, ui.animation_frame×1, watchdog.heartbeat_write×1",
+    "[Watchdog][INFO] 2026-11-10 09:58:07.800 心跳 #6 间隔=3343ms 耗时=0.2ms"
+  ],
+  "preview_dock_visible_before_hover": true,
+  "preview_layout": {
+    "rect": [
+      820,
+      1233,
+      1421,
+      1390
+    ],
+    "wpf_rect": [
+      820,
+      1233,
+      1300,
+      1358
+    ],
+    "icons": [
+      {
+        "index": 0,
+        "name": "钉钉",
+        "center": [
+          905,
+          1337
+        ]
+      },
+      {
+        "index": 1,
+        "name": "测试工作台",
+        "center": [
+          977,
+          1337
+        ]
+      },
+      {
+        "index": 2,
+        "name": "FlClash",
+        "center": [
+          1049,
+          1337
+        ]
+      },
+      {
+        "index": 5,
+        "name": "Weixin",
+        "center": [
+          1265,
+          1337
+        ]
+      },
+      {
+        "index": 6,
+        "name": "WorkBuddy",
+        "center": [
+          1337,
+          1337
+        ]
+      }
+    ],
+    "nonce": 275875487
+  },
+  "preview_hover_icon": "钉钉",
+  "preview_window_present": true,
+  "preview_window_rect": [
+    787,
+    1097,
+    1024,
+    1290
+  ],
+  "preview_hover_point": [
+    905,
+    1337
+  ],
+  "preview_closed_on_leave": true,
+  "drag": {
+    "enabled": true,
+    "seeded_pinned": true,
+    "pinned_before": [
+      "SmokeA",
+      "SmokeB",
+      "SmokeC"
+    ],
+    "dock_rect": [
+      701,
+      1233,
+      1539,
+      1390
+    ],
+    "layout": {
+      "rect": [
+        701,
+        1233,
+        1539,
+        1390
+      ],
+      "wpf_rect": [
+        701,
+        1233,
+        1371,
+        1358
+      ],
+      "icons": [
+        {
+          "index": 0,
+          "name": "SmokeA",
+          "center": [
+            786,
+            1337
+          ]
+        },
+        {
+          "index": 1,
+          "name": "SmokeB",
+          "center": [
+            858,
+            1337
+          ]
+        },
+        {
+          "index": 2,
+          "name": "SmokeC",
+          "center": [
+            930,
+            1337
+          ]
+        },
+        {
+          "index": 3,
+          "name": "钉钉",
+          "center": [
+            1023,
+            1337
+          ]
+        },
+        {
+          "index": 4,
+          "name": "测试工作台",
+          "center": [
+            1095,
+            1337
+          ]
+        },
+        {
+          "index": 5,
+          "name": "FlClash",
+          "center": [
+            1167,
+            1337
+          ]
+        },
+        {
+          "index": 8,
+          "name": "Weixin",
+          "center": [
+            1383,
+            1337
+          ]
+        },
+        {
+          "index": 9,
+          "name": "WorkBuddy",
+          "center": [
+            1455,
+            1337
+          ]
+        }
+      ],
+      "nonce": 275879625
+    },
+    "drag_points": [
+      [
+        786,
+        1337
+      ],
+      [
+        970,
+        1337
+      ]
+    ],
+    "drag_source_name": "SmokeA",
+    "pinned_after": [
+      "SmokeB",
+      "SmokeC",
+      "SmokeA"
+    ],
+    "order_changed": true,
+    "log_has_drag": true,
+    "config_restored": true
+  },
+  "drag_order_changed": true,
+  "watchdog": {
+    "enabled": true,
+    "watchdog_pids_before": [
+      34728
+    ],
+    "recovery_before": null,
+    "recovery_after": {
+      "pid": 35456,
+      "reason": "pipe-closed",
+      "utc": "2026-11-10T01:58:15.945858+00:00",
+      "taskbarRestored": true,
+      "snapshotPresent": false
+    },
+    "recovery_detected": true,
+    "recovery_reason": "pipe-closed",
+    "watchdog_pids_after_crash": [],
+    "watchdog_exited": true,
+    "log_has_recovery": true,
+    "clean_shutdown_pid": 35836,
+    "clean_watchdog_pids": [
+      33508
+    ],
+    "clean_dock_windows": 4,
+    "clean_exit_command": true,
+    "clean_shutdown_exited": true,
+    "clean_shutdown_no_recovery": true,
+    "clean_watchdog_exited": true
+  },
+  "watchdog_recovery_detected": true,
+  "watchdog_process_exited": true,
+  "watchdog_clean_shutdown": true,
+  "log_errors_late": [],
+  "verdict": "PASS",
+  "final_dock_pid": 25632,
+  "cursor_restored": true
+}

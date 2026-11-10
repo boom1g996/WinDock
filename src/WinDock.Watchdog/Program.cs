@@ -50,6 +50,7 @@ internal static class Program
             using var reader = new StreamReader(client, new UTF8Encoding(false));
             DateTime lastBeat = DateTime.UtcNow;
             Task<string?>? pending = null;
+            int beats = 0;
 
             while (true)
             {
@@ -75,6 +76,7 @@ internal static class Program
                     if (WatchdogProtocol.IsHeartbeat(frame))
                     {
                         lastBeat = DateTime.UtcNow;
+                        beats++;
                         continue;
                     }
 
@@ -90,7 +92,12 @@ internal static class Program
 
                 if ((DateTime.UtcNow - lastBeat).TotalMilliseconds >= timeout)
                 {
+                    // 把现场写清楚：宿主是否仍存活 + 收到多少帧 + 距最后一帧多久。
+                    // 「宿主存活却判失联」是心跳链路的假阳性，必须能从日志一眼分辨。
                     reason = "heartbeat-timeout";
+                    log.Warn(Module,
+                        $"心跳超时：已收 {beats} 帧，最后帧 {DateTime.UtcNow - lastBeat:mm\\:ss\\.fff} 前，" +
+                        $"宿主存活={IsHostAlive(pid)}，阈值={timeout}ms");
                     break;
                 }
             }

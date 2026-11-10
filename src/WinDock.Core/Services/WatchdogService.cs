@@ -27,6 +27,8 @@ public sealed class WatchdogService : IWatchdogService
     private StreamWriter? _writer;
     private Process? _process;
     private int _timeoutMs = 10000;
+    private long _beatCount;
+    private long _lastBeatTick;
     private bool _running;
     private bool _disposed;
 
@@ -164,6 +166,12 @@ public sealed class WatchdogService : IWatchdogService
         {
             _metrics?.Record("watchdog.heartbeat_write", sw.Elapsed.TotalMilliseconds);
         }
+
+        // 心跳间隔调大后（阈值/2）抗丢帧余量变小，逐帧时间戳是排查「宿主存活
+        // 却判失联」的唯一线索；只记一行、每秒最多 1 条，不影响 8.1 指标。
+        long now = Environment.TickCount64;
+        _log.Info(Module, $"心跳 #{++_beatCount} 间隔={now - _lastBeatTick}ms 耗时={sw.Elapsed.TotalMilliseconds:F1}ms");
+        _lastBeatTick = now;
     }
 
     public void Stop()

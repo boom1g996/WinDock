@@ -60,30 +60,26 @@ public partial class App : Application
             // WatchdogService.Stop() 发出 S 帧。App.xaml 为 OnExplicitShutdown，
             // WM_CLOSE 关主窗口不会结束进程；HWND_BROADCAST 实测到不了隐藏的
             // 自动隐藏窗口（18:00 实机），因此不能只广播。
-            uint message = NativeMethods.RegisterWindowMessage("WinDock.RequestExit.v1");
-            int self = Environment.ProcessId;
-            foreach (Process process in Process.GetProcessesByName("DockHost"))
+            PostToDockHosts("WinDock.RequestExit.v1");
+            Shutdown(0);
+            return;
+        }
+
+        if (Array.Exists(e.Args,
+                a => a.StartsWith("--dump-layout", StringComparison.OrdinalIgnoreCase)))
+        {
+            // 自动化用的只读探针：让常驻实例把图标屏幕坐标写进日志，本进程立即退出。
+            // nonce 由调用方给定并原样回写到日志，避免自动化读到上一次请求的旧行。
+            string? arg = Array.Find(e.Args,
+                a => a.StartsWith("--dump-layout", StringComparison.OrdinalIgnoreCase));
+            long nonce = 0;
+            int eq = arg?.IndexOf('=') ?? -1;
+            if (eq > 0)
             {
-                if (process.Id == self)
-                {
-                    process.Dispose();
-                    continue;
-                }
-
-                uint target = (uint)process.Id;
-                NativeMethods.EnumWindows((hwnd, _) =>
-                {
-                    NativeMethods.GetWindowThreadProcessId(hwnd, out uint owner);
-                    if (owner == target)
-                    {
-                        NativeMethods.PostMessage(hwnd, message, IntPtr.Zero, IntPtr.Zero);
-                    }
-
-                    return true;
-                }, IntPtr.Zero);
-                process.Dispose();
+                _ = long.TryParse(arg![(eq + 1)..], out nonce);
             }
 
+            PostToDockHosts("WinDock.DumpLayout.v1", nonce);
             Shutdown(0);
             return;
         }
@@ -186,6 +182,38 @@ public partial class App : Application
             // 冷启动 350ms 后弹引导；期间 Hold 住 Dock，避免被 800ms 自动隐藏抢先滑出。
             _autoHide?.SetHeld(GuideHoldReason, true);
             _timers.Schedule(GuideShowKey, 350, ShowGuide);
+        }
+    }
+
+    /// <summary>
+    /// 向所有 DockHost 进程的顶层窗口定向投递注册消息。
+    /// 不能用 HWND_BROADCAST：自动隐藏后 Dock 窗口滑出屏幕且被隐藏，广播到不了。
+    /// </summary>
+    private static void PostToDockHosts(string messageName, long wParam = 0)
+    {
+        uint message = NativeMethods.RegisterWindowMessage(messageName);
+        IntPtr payload = (IntPtr)wParam;
+        int self = Environment.ProcessId;
+        foreach (Process process in Process.GetProcessesByName("DockHost"))
+        {
+            if (process.Id == self)
+            {
+                process.Dispose();
+                continue;
+            }
+
+            uint target = (uint)process.Id;
+            NativeMethods.EnumWindows((hwnd, _) =>
+            {
+                NativeMethods.GetWindowThreadProcessId(hwnd, out uint owner);
+                if (owner == target)
+                {
+                    NativeMethods.PostMessage(hwnd, message, payload, IntPtr.Zero);
+                }
+
+                return true;
+            }, IntPtr.Zero);
+            process.Dispose();
         }
     }
 

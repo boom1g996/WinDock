@@ -49,14 +49,18 @@ public static class WatchdogProtocol
         ConfigRanges.WatchdogHeartbeatMs.Max);
 
     /// <summary>
-    /// 心跳间隔取失联阈值的 1/2（下限 500ms、上限 5s）。
-    /// WD-033 实测（归因数据）：每次 UI 线程唤醒都会被进程 CPU 记账
-    /// 计一个 15.6ms 刻度，2s 心跳 + 3s 全屏兜底把稳态推到 ~0.6%（K-13）。
-    /// 默认 10s 阈值 → 5s 心跳：失联判定语义不变（连续 10s 无帧即恢复，
-    /// 一帧丢失仍有 5s 余量），UI 唤醒从 15 次/30s 降到 6 次/30s。
+    /// 心跳间隔取失联阈值的 1/3（下限 300ms、上限 5s），保证一个失联窗口内有 3 帧、
+    /// 可容忍 2 次调度延迟。
     /// </summary>
+    /// <remarks>
+    /// WD-033 曾为压唤醒把比例放宽到 1/2（默认阈值 → 5s 心跳）：实测只剩 1 次丢帧余量，
+    /// 交互激烈时（拖拽 + 预览 + 图标重建同时发生）出现「宿主存活却判 heartbeat-timeout」
+    /// 的假阳性并写出错误的恢复事件（2026-11-10 09:51:27 现场）。需求 4.4/AC-11 的
+    /// 口径是「10s 无心跳即恢复」，因此恢复 1/3：判定时刻仍是 10s，但不因一次
+    /// 5s 级的 UI 抖动误判。多出的 3 次唤醒约 0.15% CPU（已在 8.1 复核表中量化）。
+    /// </remarks>
     public static int HeartbeatIntervalMs(int timeoutMs) =>
-        Math.Clamp(ClampTimeout(timeoutMs) / 2, 500, 5000);
+        Math.Clamp(ClampTimeout(timeoutMs) / 3, 300, 5000);
 
     /// <summary>宿主 PID 存活检查周期：进程被强杀时远快于 10s 即可恢复（4.4 要求 5s）。</summary>
     public static int PollIntervalMs => 500;

@@ -280,9 +280,9 @@ public static class SelfTest
             Check("看门狗阈值夹紧与心跳间隔",
                 WatchdogProtocol.ClampTimeout(50) == 1000
                 && WatchdogProtocol.ClampTimeout(999999) == 60000
-                // WD-033：上限 2000 → 5000、除数 1/3 → 1/2，默认 10s 阈值心跳 2s → 5s
-                && WatchdogProtocol.HeartbeatIntervalMs(10000) == 5000
-                && WatchdogProtocol.HeartbeatIntervalMs(1000) == 500);
+                // WD-035：除数 1/2 → 1/3（5s → 3.3s），给「宿主存活却判失联」留丢帧余量
+                && WatchdogProtocol.HeartbeatIntervalMs(10000) == 3333
+                && WatchdogProtocol.HeartbeatIntervalMs(1000) == 333);
             Check("心跳 / 正常退出帧协议",
                 WatchdogProtocol.IsHeartbeat("H")
                 && WatchdogProtocol.IsShutdown("S")
