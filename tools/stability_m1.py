@@ -32,6 +32,25 @@ k32 = ctypes.WinDLL("kernel32", use_last_error=True)
 k32.GetProcessHandleCount.argtypes = [ctypes.c_void_p, ctypes.POINTER(ctypes.c_uint32)]
 k32.GetProcessHandleCount.restype = ctypes.c_bool
 
+u32 = ctypes.WinDLL("user32", use_last_error=True)
+u32.GetGuiResources.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+u32.GetGuiResources.restype = ctypes.c_uint32
+GR_GDIOBJECTS = 0
+GR_USEROBJECTS = 1
+
+
+def gui_resources(pid: int) -> tuple[int | None, int | None]:
+    """GDI / USER 对象数：句柄涨但这两者不涨 → 多为内核句柄（图标/文件/DWM），
+    两者一起涨才是经典的 GDI/USER 泄漏。"""
+    handle = smoke.k32.OpenProcess(0x1000, False, pid)
+    if not handle:
+        return None, None
+    try:
+        return (int(u32.GetGuiResources(handle, GR_GDIOBJECTS)),
+                int(u32.GetGuiResources(handle, GR_USEROBJECTS)))
+    finally:
+        smoke.k32.CloseHandle(handle)
+
 
 def handle_count(pid: int) -> int | None:
     handle = smoke.k32.OpenProcess(0x1000, False, pid)
@@ -118,6 +137,8 @@ def summarize(path: Path, warmup_s: float = 300.0) -> int:
     mems = [s["working_set_mb"] for s in steady if s.get("working_set_mb") is not None]
     privs = [s["private_mb"] for s in steady if s.get("private_mb") is not None]
     handles = [s["handles"] for s in steady if s.get("handles") is not None]
+    gdis = [s["gdi"] for s in steady if s.get("gdi") is not None]
+    users = [s["user"] for s in steady if s.get("user") is not None]
     first, last = samples[0], samples[-1]
     span_h = (last["uptime_s"] - first["uptime_s"]) / 3600.0
     crashes = sum(1 for s in samples if s.get("host_alive") is False)
@@ -151,10 +172,14 @@ def summarize(path: Path, warmup_s: float = 300.0) -> int:
         "working_set_mb": stat(mems),
         "private_mb": stat(privs),
         "handles": stat([float(h) for h in handles]),
+        "gdi": stat([float(g) for g in gdis]),
+        "user": stat([float(u) for u in users]),
         "working_set_drift_mb": round((mems[-1] - mems[0]), 2) if len(mems) >= 2 else None,
         "private_drift_mb": round((privs[-1] - privs[0]), 2) if len(privs) >= 2 else None,
         "working_set_trim_samples": trims,
         "handle_drift": (handles[-1] - handles[0]) if len(handles) >= 2 else None,
+        "gdi_drift": (gdis[-1] - gdis[0]) if len(gdis) >= 2 else None,
+        "user_drift": (users[-1] - users[0]) if len(users) >= 2 else None,
         "host_dead_samples": crashes,
         "watchdog_recoveries": recoveries,
         "log_errors": errors,
@@ -220,6 +245,8 @@ def main() -> int:
                 "working_set_mb": None,
                 "private_mb": None,
                 "handles": None,
+                "gdi": None,
+                "user": None,
                 "dock_windows": 0,
                 "hotzone": False,
                 "watchdog_pids": smoke.process_pids("WinDock.Watchdog.exe"),
@@ -234,6 +261,7 @@ def main() -> int:
                 sample["working_set_mb"] = round(ws / 1024 / 1024, 2) if ws else None
                 sample["private_mb"] = round(priv / 1024 / 1024, 2) if priv else None
                 sample["handles"] = handle_count(pid)
+                sample["gdi"], sample["user"] = gui_resources(pid)
                 windows = smoke.windows_of(pid)
                 sample["dock_windows"] = len([w for w in windows if smoke.is_dock_window(w)])
                 sample["hotzone"] = any("HotZone" in w["class"] for w in windows)
