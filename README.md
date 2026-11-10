@@ -4,7 +4,7 @@
 
 > **当前阶段**：M1 MVP（WD-001~013）已落地；**M2 六批已实施**（需求 14.1 已满足）：第一批预研 / 骨架 / WD-018 图标缓存，第二批 WD-019 动画 + WD-015 自动隐藏 / 热区 / 全屏 / 热键，第三批 WD-014 缩略图预览 + WD-017 首次引导，第四批 WD-016 拖拽排序 + WD-020 独立进程 Watchdog，第五批 WD-033 内置打点与 CPU 突发归因 + WD-034 托盘去 WinForms 化，第六批 K-17 交互复核 + WD-035 长稳采样器 + **K-02 自包含单文件发布达成**。Release 构建 0 警告 0 错误（**无 WinForms 依赖**）、离线自检 **38/38**、全功能冒烟 **PASS**（拖拽落盘 / 预览开合 / 看门狗强杀恢复 + 优雅握手）。
 >
-> **性能如实说明**：稳态 CPU 突发根因已定位为周期性唤醒的 15.6ms 记账刻度（枚举移后台 / 全屏退避 / 心跳间隔）。第六批为修 K-18 看门狗假阳性把心跳从 5s 收紧到 3.3s，30s 稳态 CPU **0.573%**（分段 0~0.938%，无大突发）；**对照实验关闭看门狗 = 0.104% ≤0.3% 达标**——8.1 与 AC-11 的 UI 心跳存在内在张力，口径待产品确认（K-13）。内存 **199MB**（去 WinForms 后原 ~218MB），仍 >120MB（WPF D3D / Intel 驱动结构性开销，K-01/K-14）。**长稳实证进行中**（`tools/stability_m1.py` 24h 采样），数据齐全前不宣称「1 天不崩」。详见 [M2 变更说明与已知问题](docs/M2-变更说明与已知问题.md)；进度见 [M2 设计说明与任务拆解](docs/M2-设计说明与任务拆解.md) §4.1~4.6。
+> **性能如实说明**：稳态 CPU 突发根因已定位为周期性唤醒的 15.6ms 记账刻度（枚举移后台 / 全屏退避 / 心跳间隔）。第六批为修 K-18 看门狗假阳性把心跳从 5s 收紧到 3.3s，30s 稳态 CPU **0.573%**（分段 0~0.938%，无大突发）；**对照实验关闭看门狗 = 0.104% ≤0.3% 达标**——8.1 与 AC-11 的 UI 心跳存在内在张力，口径待产品确认（K-13）。**注意口径**：需求 8.1 / AC-20 写的是「任务管理器 **5 分钟平均**」，长稳采样按 5 分钟滚动窗口算得 **0.17~0.19%（≤0.3%，达标率 1.0，初步待 24h 定稿）**；30s 单次采样的 0.573% 是 15.6ms 记账粒度放大，**不适合用来判 8.1**。内存 **199MB**（去 WinForms 后原 ~218MB），仍 >120MB（WPF D3D / Intel 驱动结构性开销，K-01/K-14）。**长稳实证进行中**（`tools/stability_m1.py` 24h 采样），数据齐全前不宣称「1 天不崩」。详见 [M2 变更说明与已知问题](docs/M2-变更说明与已知问题.md)；进度见 [M2 设计说明与任务拆解](docs/M2-设计说明与任务拆解.md) §4.1~4.6。
 
 ## 项目管理
 
@@ -25,6 +25,7 @@
 | [M1 变更说明与已知问题](docs/M1-变更说明与已知问题.md) | 交付物、验证结果、性能实测、已知问题列表与 M2 建议 |
 | [M2 设计说明与任务拆解](docs/M2-设计说明与任务拆解.md) | 10 条设计决策（含实机修订）、新增接口边界、WD-014~036 任务与验收映射、6 条默认值（**已确认**）、六批实施进度与风险降级 |
 | [M2 变更说明与已知问题](docs/M2-变更说明与已知问题.md) | 阶段性交付物、第六批变更清单、验证结果、K-01~K-19 已知问题、长期结论与下一步 |
+| [M2 指标与验收口径待确认清单](docs/M2-指标与验收口径待确认清单.md) | 待产品/评审拍板的 6 条口径（CPU 判定窗口、内存阈值、AC-05 / AC-12 / AC-21 缺口、AC-11 张力），每条含原文、实测、建议 |
 | [M2-probe-raw.json](docs/M2-probe-raw.json) | M2 能力预研原始数据（DWM / QUNS / Flash / HotKey / 热区） |
 | [M2-smoke-batch2.json](docs/M2-smoke-batch2.json) | 第二批实机冒烟：自动隐藏、热区恢复、稳态 CPU 分段 |
 | [M2-smoke-batch3.json](docs/M2-smoke-batch3.json) | 第三批功能冒烟：引导窗口、预览面板、稳态 CPU；`-initial` 保留回环回归现场，`-idle-trace` 为 30s 分段复采 |
@@ -33,7 +34,7 @@
 | [M2-smoke-batch5*.json](docs/M2-smoke-batch5-full.json) | 第五批：全功能冒烟 / 30s 稳态（0.417%）/ 关看门狗对照（0.104% 达标）/ 锁屏环境对照 |
 | [M2-smoke-batch6-k17.json](docs/M2-smoke-batch6-k17.json) | 第六批：解锁后全功能冒烟（拖拽 / 预览 / 看门狗 PASS，K-17 关闭） |
 | [M2-smoke-batch6-idle.json](docs/M2-smoke-batch6-idle.json) | 第六批 30s 纯稳态（3.3s 心跳，0.573% / 199MB） |
-| [M2-stability.jsonl](docs/M2-stability.jsonl) | WD-035 长稳采样（60s/点，逐行 JSON；`--summary` 生成同名 `.summary.json`） |
+| [M2-stability.jsonl](docs/M2-stability.jsonl) | WD-035 长稳采样（60s/点，逐行 JSON；`--summary` 生成同名 `.summary.json`：5 分钟滚动均值 + 达标窗口占比 + 宿主 pid 分段 + GDI/USER 漂移） |
 | [M1-smoke-result.json](docs/M1-smoke-result.json) | M1 交付冒烟原始结果（窗口 / CPU / 内存 / 日志错误） |
 | [BACKLOG](docs/BACKLOG.md) | 5 里程碑 / 39 议题（含 M2 新增 4 条）/ 17 标签 |
 | [M0-probe-raw.json](docs/M0-probe-raw.json) | 只读系统探针原始输出 |
@@ -75,6 +76,8 @@ python tools/smoke_m1.py --restart --park-cursor --sample-seconds 30 `
 python tools/stability_m1.py --hours 24 --interval 60 --output docs/M2-stability.jsonl
 python tools/stability_m1.py --summary --output docs/M2-stability.jsonl
 ```
+
+> 长稳采样的两个注意点：① 写出方式是**追加**，中途断了重跑同一条命令即续采（不会覆盖已有样本，`runs` 字段按宿主 pid 分段）；② 采集器会拉起 `DockHost`，**终止采集器会连带回收宿主与看门狗**（同一进程树），这一轮不会写恢复事件，但宿主运行时长会重新计。
 
 产物：`artifacts/WinDock-win-x64/`（**自包含单文件**，推荐交付）与 `artifacts/WinDock-framework-dependent/`（需 .NET 10 桌面运行时），两者都含 `DockHost.exe`（主程序）、`WinDock.Settings.exe`（设置窗口）、`WinDock.Watchdog.exe`（守护进程），**三者必须同目录**；守护进程缺失时主程序会记 WARN 并降级为关闭。
 
