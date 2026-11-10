@@ -113,6 +113,68 @@ def error_lines(since: datetime) -> list[str]:
     return out
 
 
+def _stamp(sample: dict) -> datetime | None:
+    try:
+        return datetime.fromisoformat(sample["at"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def _span_hours(first: dict, last: dict) -> float:
+    """按墙钟时间算跨度。不用 uptime_s：它相对「采集器启动」而非「宿主启动」，
+    重跑一次采集就会清零，跨 run 相加会得出错误的总时长。"""
+    a, b = _stamp(first), _stamp(last)
+    if a is None or b is None:
+        return 0.0
+    return (b - a).total_seconds() / 3600.0
+
+
+def _median_interval(samples: list[dict]) -> float:
+    deltas = []
+    previous = None
+    for sample in samples:
+        stamp = _stamp(sample)
+        if stamp is None:
+            continue
+        if previous is not None:
+            deltas.append((stamp - previous).total_seconds())
+        previous = stamp
+    if not deltas:
+        return 60.0
+    deltas.sort()
+    return max(1.0, deltas[len(deltas) // 2])
+
+
+def _steady_samples(samples: list[dict], warmup_s: float) -> list[dict]:
+    """按宿主实例（pid）各自跳过前 warmup_s 秒：宿主重启后又是一次冷启动，
+    不能让新实例的 JIT 计入上一次实例的稳态趋势。"""
+    out = []
+    anchors: dict = {}
+    for sample in samples:
+        pid = sample.get("pid")
+        stamp = _stamp(sample)
+        if stamp is None:
+            out.append(sample)
+            continue
+        anchors.setdefault(pid, stamp)
+        if (stamp - anchors[pid]).total_seconds() >= warmup_s:
+            out.append(sample)
+    return out
+
+
+def _rolling(values: list[float | None], window: int) -> list[float]:
+    """滑动窗口均值，窗口内 None 跳过；不足窗口长度的尾巴也要算（不足 5 分钟时）。"""
+    cleaned = [v for v in values if v is not None]
+    if not cleaned:
+        return []
+    window = max(1, min(window, len(cleaned)))
+    out = []
+    for i in range(len(cleaned) - window + 1):
+        chunk = cleaned[i:i + window]
+        out.append(round(sum(chunk) / len(chunk), 3))
+    return out
+
+
 def summarize(path: Path, warmup_s: float = 300.0) -> int:
     if not path.is_file():
         print(f"[summary] no data file: {path}", file=sys.stderr)
@@ -132,7 +194,7 @@ def summarize(path: Path, warmup_s: float = 300.0) -> int:
         return 2
 
     # 冷启动（JIT / 图标提取 / 首次 DWM 注册）不属于长稳漂移，先剔除预热窗口再算趋势。
-    steady = [s for s in samples if s.get("uptime_s", 0) >= warmup_s] or samples
+    steady = _steady_samples(samples, warmup_s) or samples
     cpus = [s["cpu_percent"] for s in steady if s.get("cpu_percent") is not None]
     mems = [s["working_set_mb"] for s in steady if s.get("working_set_mb") is not None]
     privs = [s["private_mb"] for s in steady if s.get("private_mb") is not None]
@@ -140,7 +202,7 @@ def summarize(path: Path, warmup_s: float = 300.0) -> int:
     gdis = [s["gdi"] for s in steady if s.get("gdi") is not None]
     users = [s["user"] for s in steady if s.get("user") is not None]
     first, last = samples[0], samples[-1]
-    span_h = (last["uptime_s"] - first["uptime_s"]) / 3600.0
+    span_h = _span_hours(first, last)
     crashes = sum(1 for s in samples if s.get("host_alive") is False)
     recoveries = sum(1 for s in samples if s.get("new_recovery"))
     errors = sum(len(s.get("new_errors") or []) for s in samples)
@@ -152,6 +214,16 @@ def summarize(path: Path, warmup_s: float = 300.0) -> int:
         return {"min": round(min(values), 3), "avg": round(sum(values) / len(values), 3),
                 "max": round(max(values), 3)}
 
+    # 需求 8.1 / AC-20 的口径是「任务管理器 5 分钟平均」与「工作集 ≤120MB」，
+    # 单点 60s 值既会被系统记账刻度放大（见 K-13），也会被 OS trim 拉低（见 K-14），
+    # 因此按 5 分钟滚动窗口算均值，并给出「达标窗口占比」——这才是可复核的判定。
+    interval_s = _median_interval(samples)
+    win = max(1, int(round(300.0 / interval_s)))
+    cpu_5min = _rolling([s.get("cpu_percent") for s in steady], win)
+    ws_5min = _rolling([s.get("working_set_mb") for s in steady], win)
+    cpu_pass = [v for v in cpu_5min if v <= 0.3]
+    ws_pass = [v for v in ws_5min if v <= 120.0]
+
     # 工作集会被 Windows 主动 trim（实测出现 32MB 的瞬时值），单看它会把「系统回收」
     # 误读成「内存下降」；私有字节更能反映真实占用趋势，两者都报。
     trims = 0
@@ -160,16 +232,31 @@ def summarize(path: Path, warmup_s: float = 300.0) -> int:
         median = ordered[len(ordered) // 2]
         trims = sum(1 for m in mems if m < median * 0.5)
 
+    runs = []
+    for pid in dict.fromkeys(s.get("pid") for s in samples):
+        group = [s for s in samples if s.get("pid") == pid]
+        runs.append({"pid": pid, "samples": len(group),
+                     "hours": round(_span_hours(group[0], group[-1]), 2),
+                     "started": group[0].get("at"), "ended": group[-1].get("at")})
+
     summary = {
         "file": str(path),
         "samples": len(samples),
         "steady_samples": len(steady),
         "warmup_s": warmup_s,
+        "interval_s": interval_s,
         "window_hours": round(span_h, 2),
         "started": first.get("at"),
         "ended": last.get("at"),
+        "runs": runs,
+        "host_pid_changes": len(runs) - 1,
         "cpu_percent": stat(cpus),
+        "cpu_5min": stat(cpu_5min),
+        "cpu_5min_windows": len(cpu_5min),
+        "cpu_5min_pass_ratio": round(len(cpu_pass) / len(cpu_5min), 3) if cpu_5min else None,
         "working_set_mb": stat(mems),
+        "working_set_5min": stat(ws_5min),
+        "working_set_pass_ratio": round(len(ws_pass) / len(ws_5min), 3) if ws_5min else None,
         "private_mb": stat(privs),
         "handles": stat([float(h) for h in handles]),
         "gdi": stat([float(g) for g in gdis]),
