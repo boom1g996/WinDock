@@ -131,6 +131,14 @@ def summarize(path: Path, warmup_s: float = 300.0) -> int:
         return {"min": round(min(values), 3), "avg": round(sum(values) / len(values), 3),
                 "max": round(max(values), 3)}
 
+    # 工作集会被 Windows 主动 trim（实测出现 32MB 的瞬时值），单看它会把「系统回收」
+    # 误读成「内存下降」；私有字节更能反映真实占用趋势，两者都报。
+    trims = 0
+    if mems:
+        ordered = sorted(mems)
+        median = ordered[len(ordered) // 2]
+        trims = sum(1 for m in mems if m < median * 0.5)
+
     summary = {
         "file": str(path),
         "samples": len(samples),
@@ -143,7 +151,9 @@ def summarize(path: Path, warmup_s: float = 300.0) -> int:
         "working_set_mb": stat(mems),
         "private_mb": stat(privs),
         "handles": stat([float(h) for h in handles]),
-        "memory_drift_mb": round((mems[-1] - mems[0]), 2) if len(mems) >= 2 else None,
+        "working_set_drift_mb": round((mems[-1] - mems[0]), 2) if len(mems) >= 2 else None,
+        "private_drift_mb": round((privs[-1] - privs[0]), 2) if len(privs) >= 2 else None,
+        "working_set_trim_samples": trims,
         "handle_drift": (handles[-1] - handles[0]) if len(handles) >= 2 else None,
         "host_dead_samples": crashes,
         "watchdog_recoveries": recoveries,

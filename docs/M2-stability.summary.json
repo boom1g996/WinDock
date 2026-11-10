@@ -1,0 +1,37 @@
+{
+  "file": "docs\\M2-stability.jsonl",
+  "samples": 6,
+  "steady_samples": 6,
+  "warmup_s": 0.0,
+  "window_hours": 0.08,
+  "started": "2026-11-10T02:06:37+00:00",
+  "ended": "2026-11-10T02:11:41+00:00",
+  "cpu_percent": {
+    "min": 0.078,
+    "avg": 0.942,
+    "max": 1.849
+  },
+  "working_set_mb": {
+    "min": 32.51,
+    "avg": 147.64,
+    "max": 208.21
+  },
+  "private_mb": {
+    "min": 134.95,
+    "avg": 137.278,
+    "max": 139.39
+  },
+  "handles": {
+    "min": 637.0,
+    "avg": 641.833,
+    "max": 648.0
+  },
+  "working_set_drift_mb": -164.07,
+  "private_drift_mb": 3.42,
+  "working_set_trim_samples": 2,
+  "handle_drift": 11,
+  "host_dead_samples": 0,
+  "watchdog_recoveries": 0,
+  "log_errors": 0,
+  "samples_without_dock_window": 0
+}
