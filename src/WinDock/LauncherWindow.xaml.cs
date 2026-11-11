@@ -34,6 +34,8 @@ public partial class LauncherWindow : Window
     private bool _loaded;
     private bool _loading;
     private int _feedToken;
+    private IReadOnlyList<LauncherEntry>? _renderedEntries;
+    private readonly List<(Image Image, string Path)> _pending = new();
 
     public LauncherWindow(IIconService icons, IAppLauncher launcher, ILogService log,
         DockConfig config)
@@ -201,10 +203,25 @@ public partial class LauncherWindow : Window
     /// 分批填充网格：图标提取走 Shell API，一次性做 300 个会把 UI 线程卡住 1~2 秒。
     /// 每批 18 个（正好一行），批与批之间让出 Dispatcher，面板先出来再逐步填满。
     /// </summary>
+    /// <summary>
+    /// 分批填充网格：磁贴本身是纯 WPF 对象构造（便宜），图标提取甩后台线程。
+    ///
+    /// **幂等**：同一份条目列表（引用相同）时直接复用已建好的磁贴。
+    /// 之前每次 <see cref="Open"/> 都 Clear + 重建 124 个控件，面板每次打开都要
+    /// 重付一遍布局与绘制（K-41 的一半）。
+    /// </summary>
     private void Populate(IReadOnlyList<LauncherEntry> entries)
     {
+        if (ReferenceEquals(entries, _renderedEntries) && AppsPanel.Children.Count > 0)
+        {
+            StatusText.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        _renderedEntries = entries;
         int token = ++_feedToken;
         AppsPanel.Children.Clear();
+        _pending.Clear();
         StatusText.Visibility = Visibility.Collapsed;
 
         if (entries.Count == 0)
@@ -226,8 +243,13 @@ public partial class LauncherWindow : Window
         int end = Math.Min(start + BatchSize, entries.Count);
         for (int i = start; i < end; i++)
         {
-            AppsPanel.Children.Add(CreateTile(entries[i]));
+            AppsPanel.Children.Add(CreateTile(entries[i], token));
         }
+
+        // 磁贴一步只做「纯 WPF 对象构造」（几十毫秒），图标甩到后台线程去提取。
+        // 之前是 CreateTile 里同步调 Shell 图标提取，124 个应用要 5 秒，
+        // 首次打开直接把 UI 线程按住 5 秒、CPU 冲到 95%（K-41）。
+        PrefetchIcons(token);
 
         if (end < entries.Count)
         {
@@ -236,7 +258,57 @@ public partial class LauncherWindow : Window
         }
     }
 
-    private Button CreateTile(LauncherEntry entry)
+    /// <summary>
+    /// 后台提取图标，完成一个点亮一个。IconService 返回的 BitmapSource 已 Freeze，
+    /// 可以跨线程共享；缓存本身有 lock 保护。
+    /// </summary>
+    private void PrefetchIcons(int token)
+    {
+        if (_pending.Count == 0)
+        {
+            return;
+        }
+
+        var batch = _pending.ToArray();
+        _pending.Clear();
+        int size = Math.Clamp(_config.Dock.IconSize, 32, 96);
+        Task.Run(() =>
+        {
+            foreach ((Image image, string path) in batch)
+            {
+                if (token != _feedToken)
+                {
+                    return;
+                }
+
+                ImageSource? source = null;
+                try
+                {
+                    source = _icons.GetIcon(path, size);
+                }
+                catch (Exception ex)
+                {
+                    _log.Warn(Module, $"入口图标提取失败（{path}）：{ex.Message}");
+                }
+
+                if (source is null)
+                {
+                    continue;
+                }
+
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
+                    new Action(() =>
+                    {
+                        if (token == _feedToken)
+                        {
+                            image.Source = source;
+                        }
+                    }));
+            }
+        });
+    }
+
+    private Button CreateTile(LauncherEntry entry, int token)
     {
         int size = Math.Clamp(_config.Dock.IconSize, 32, 96);
         var image = new Image
@@ -244,9 +316,9 @@ public partial class LauncherWindow : Window
             Width = size,
             Height = size,
             Stretch = Stretch.Uniform,
-            Source = _icons.GetIcon(entry.Path, size),
         };
         RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+        _pending.Add((image, entry.Path));
 
         var text = new TextBlock
         {
