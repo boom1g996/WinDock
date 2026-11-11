@@ -55,6 +55,41 @@ public sealed class DockLayoutConfig
     /// 与 macOS 一致默认只在主屏显示）。副屏 Dock 常驻显示、不参与自动隐藏。
     /// </summary>
     public bool PerMonitorDocks { get; set; }
+
+    // ---- M5 任务栏替代模式 --------------------------------------------------
+
+    /// <summary>
+    /// 条形态：<c>dock</c> = macOS 风格胶囊、宽度随条目数自适应；
+    /// <c>toolbar</c> = 三段任务栏（左：启动台/显示器/当前窗口，中：时钟，右：应用+托盘+设置）。
+    /// </summary>
+    /// <remarks>
+    /// 默认 toolbar：产品目标是「替代 Windows 任务栏」，而不是做一个 macOS Dock 的复刻
+    /// （2026-11-11 用户以 AirDeck 为参照明确了这个方向）。想要原来的胶囊观感，
+    /// 在设置 → 任务栏 → 形态里切回 dock 即可。
+    /// </remarks>
+    public string Mode { get; set; } = "toolbar";
+
+    /// <summary>toolbar 模式宽度：<c>fill</c> 铺满工作区（左右留 <see cref="ToolbarMargin"/>）；<c>fit</c> 按内容。</summary>
+    public string WidthMode { get; set; } = "fill";
+
+    /// <summary>toolbar 模式的条高度（DIP，不含放大/阴影留白）。</summary>
+    public int ToolbarHeight { get; set; } = 58;
+
+    /// <summary>toolbar 模式左右留白（DIP）；0 表示顶到屏幕两侧。</summary>
+    public int ToolbarMargin { get; set; } = 20;
+
+    public bool ShowClock { get; set; } = true;
+
+    public string ClockFormat { get; set; } = "HH:mm";
+
+    public string DateFormat { get; set; } = "yyyy/MM/dd";
+
+    public bool ShowLauncher { get; set; } = true;
+
+    public bool ShowMonitorButton { get; set; } = true;
+
+    /// <summary>左段「当前窗口实况缩略图」：用 DWM 缩略图直绘前台窗口。</summary>
+    public bool ShowActiveThumbnail { get; set; } = true;
 }
 
 /// <summary>外观参数（6.10）。</summary>
@@ -226,6 +261,12 @@ public static class ConfigRanges
     public static readonly string[] TaskbarModes = { "replace", "coexist", "beautify" };
     public static readonly string[] Languages = { "zh-CN", "en" };
     public static readonly string[] Positions = { "bottom", "left", "right" };
+
+    // M5 任务栏形态
+    public static readonly (int Min, int Max) ToolbarHeight = (44, 96);
+    public static readonly (int Min, int Max) ToolbarMargin = (0, 200);
+    public static readonly string[] DockModes = { "dock", "toolbar" };
+    public static readonly string[] ToolbarWidthModes = { "fill", "fit" };
 
     /// <summary>预设主题标识（WD-023）：custom 为手动微调，其余为内置预设。</summary>
     public static readonly string[] Presets =

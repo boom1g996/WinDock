@@ -117,6 +117,11 @@ public sealed class ConfigService : IConfigService
         d.Padding = Clamp(d.Padding, ConfigRanges.Padding, "dock.padding", warnings);
         d.CornerRadius = Clamp(d.CornerRadius, ConfigRanges.CornerRadius, "dock.cornerRadius", warnings);
         d.OffsetFromEdge = Clamp(d.OffsetFromEdge, ConfigRanges.OffsetFromEdge, "dock.offsetFromEdge", warnings);
+        // M5 任务栏形态：非法值回落到产品默认（toolbar），避免手改配置把界面搞成空窗。
+        d.Mode = Choice(d.Mode, ConfigRanges.DockModes, "toolbar", "dock.mode", warnings);
+        d.WidthMode = Choice(d.WidthMode, ConfigRanges.ToolbarWidthModes, "fill", "dock.widthMode", warnings);
+        d.ToolbarHeight = Clamp(d.ToolbarHeight, ConfigRanges.ToolbarHeight, "dock.toolbarHeight", warnings);
+        d.ToolbarMargin = Clamp(d.ToolbarMargin, ConfigRanges.ToolbarMargin, "dock.toolbarMargin", warnings);
         if (d.MonitorIds.Count == 0)
         {
             d.MonitorIds.Add("primary");

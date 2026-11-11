@@ -238,6 +238,8 @@ public partial class App : Application
 
         _dock = new MainWindow(_config, _log, _taskbar, _enumerator,
             icons, _animation, launcher, _metrics);
+        // M5：任务栏右端的齿轮按钮走的也是同一条设置窗口路径（与托盘菜单一致）。
+        _dock.SettingsRequested += (_, _) => OpenSettings();
         _tray = new TrayService(_config, _log, _taskbar, _dock, OpenSettings, OpenGuide);
 
         // M2 组合根：所有新增能力按接口组装，模块之间不互相引用实现（需求 14.2）。

@@ -149,6 +149,22 @@ public partial class MainWindow : Window
             ("Ctrl+Shift+D", "Ctrl+Shift+D"),
             ("Ctrl+Alt+Space", "Ctrl+Alt+Space"));
 
+        // M5：任务栏形态与宽度策略
+        Fill(BarModeCombo,
+            (Loc.Instance.T("Settings_BarModeDock"), "dock"),
+            (Loc.Instance.T("Settings_BarModeToolbar"), "toolbar"));
+
+        Fill(BarWidthModeCombo,
+            (Loc.Instance.T("Settings_BarWidthFill"), "fill"),
+            (Loc.Instance.T("Settings_BarWidthFit"), "fit"));
+
+        // 与「任务栏模式」是同一个字段（general.taskbarMode）的两个入口：
+        // 这里靠语音习惯命名（仅美化 / 精简共存 / 完全接管），Behavior 组里保留原选项。
+        Fill(NativeBarCombo,
+            (Loc.Instance.T("Settings_ModeBeautify"), "beautify"),
+            (Loc.Instance.T("Settings_ModeCoexist"), "coexist"),
+            (Loc.Instance.T("Settings_ModeReplace"), "replace"));
+
         BuildMonitorCombo();
     }
 
@@ -184,6 +200,7 @@ public partial class MainWindow : Window
         PreviewLabel.Text = Loc.Instance.T("Settings_Preview");
 
         PresetLabel.Text = Loc.Instance.T("Settings_Preset");
+        ToolbarGroup.Header = Loc.Instance.T("Settings_GroupToolbar");
         LayoutGroup.Header = Loc.Instance.T("Settings_GroupLayout");
         MaterialGroup.Header = Loc.Instance.T("Settings_GroupMaterial");
         BehaviorGroup.Header = Loc.Instance.T("Settings_Behavior");
@@ -237,6 +254,17 @@ public partial class MainWindow : Window
         PerformanceCheckBox.Content = Loc.Instance.T("Settings_PerformanceMode");
         PerformanceHint.Text = Loc.Instance.T("Settings_PerformanceHint");
         AdminHint.Text = Loc.Instance.T("Settings_AdminHint");
+
+        BarModeLabel.Text = Loc.Instance.T("Settings_BarMode");
+        BarWidthModeLabel.Text = Loc.Instance.T("Settings_BarWidthMode");
+        BarHeightLabel.Text = Loc.Instance.T("Settings_BarHeight");
+        BarMarginLabel.Text = Loc.Instance.T("Settings_BarMargin");
+        ClockCheckBox.Content = Loc.Instance.T("Settings_ShowClock");
+        LauncherCheckBox.Content = Loc.Instance.T("Settings_ShowLauncher");
+        MonitorButtonCheckBox.Content = Loc.Instance.T("Settings_ShowMonitorButton");
+        ActiveThumbCheckBox.Content = Loc.Instance.T("Settings_ShowActiveThumb");
+        NativeBarLabel.Text = Loc.Instance.T("Settings_NativeBar");
+        NativeBarHint.Text = Loc.Instance.T("Settings_NativeBarHint");
 
         ExportButton.Content = Loc.Instance.T("Settings_Export");
         ImportButton.Content = Loc.Instance.T("Settings_Import");
@@ -363,6 +391,26 @@ public partial class MainWindow : Window
         PerformanceCheckBox.IsChecked = a.PerformanceMode;
         RefreshConflictText();
 
+        // M5 任务栏分组
+        BarModeCombo.SelectedValue = d.Mode;
+        BarWidthModeCombo.SelectedValue = d.WidthMode;
+        BarHeightSlider.Value = d.ToolbarHeight;
+        BarMarginSlider.Value = d.ToolbarMargin;
+        ClockCheckBox.IsChecked = d.ShowClock;
+        LauncherCheckBox.IsChecked = d.ShowLauncher;
+        MonitorButtonCheckBox.IsChecked = d.ShowMonitorButton;
+        ActiveThumbCheckBox.IsChecked = d.ShowActiveThumbnail;
+        NativeBarCombo.SelectedValue = config.General.TaskbarMode;
+
+        bool toolbarMode = string.Equals(d.Mode, "toolbar", StringComparison.OrdinalIgnoreCase);
+        BarWidthModeCombo.IsEnabled = toolbarMode;
+        BarHeightSlider.IsEnabled = toolbarMode;
+        BarMarginSlider.IsEnabled = toolbarMode;
+        ClockCheckBox.IsEnabled = toolbarMode;
+        LauncherCheckBox.IsEnabled = toolbarMode;
+        MonitorButtonCheckBox.IsEnabled = toolbarMode;
+        ActiveThumbCheckBox.IsEnabled = toolbarMode;
+
         ReflectionStrengthSlider.IsEnabled = a.Reflection.Enabled;
         ReflectionHeightSlider.IsEnabled = a.Reflection.Enabled;
         HideDelaySlider.IsEnabled = b.AutoHide;
@@ -401,7 +449,25 @@ public partial class MainWindow : Window
         BlurCombo.SelectionChanged += (_, _) => OnValueChanged();
         ShadowCombo.SelectionChanged += (_, _) => OnValueChanged();
         AccentCombo.SelectionChanged += (_, _) => OnValueChanged();
-        ModeCombo.SelectionChanged += (_, _) => OnValueChanged();
+        ModeCombo.SelectionChanged += (_, _) =>
+        {
+            SyncNativeBarFromMode();
+            OnValueChanged();
+        };
+        // M5 任务栏分组
+        BarModeCombo.SelectionChanged += (_, _) => OnBarModeChanged();
+        BarWidthModeCombo.SelectionChanged += (_, _) => OnValueChanged();
+        BarHeightSlider.ValueChanged += (_, _) => OnValueChanged();
+        BarMarginSlider.ValueChanged += (_, _) => OnValueChanged();
+        NativeBarCombo.SelectionChanged += (_, _) => OnValueChanged();
+        ClockCheckBox.Checked += (_, _) => OnValueChanged();
+        ClockCheckBox.Unchecked += (_, _) => OnValueChanged();
+        LauncherCheckBox.Checked += (_, _) => OnValueChanged();
+        LauncherCheckBox.Unchecked += (_, _) => OnValueChanged();
+        MonitorButtonCheckBox.Checked += (_, _) => OnValueChanged();
+        MonitorButtonCheckBox.Unchecked += (_, _) => OnValueChanged();
+        ActiveThumbCheckBox.Checked += (_, _) => OnValueChanged();
+        ActiveThumbCheckBox.Unchecked += (_, _) => OnValueChanged();
         LanguageCombo.SelectionChanged += (_, _) => OnLanguageChanged();
         PresetCombo.SelectionChanged += (_, _) => OnPresetChanged();
 
@@ -530,6 +596,28 @@ public partial class MainWindow : Window
         a.PerformanceMode = PerformanceCheckBox.IsChecked == true;
 
         config.Dock.PerMonitorDocks = PerMonitorCheckBox.IsChecked == true;
+
+        // M5 任务栏分组
+        d.Mode = BarModeCombo.SelectedValue as string ?? d.Mode;
+        d.WidthMode = BarWidthModeCombo.SelectedValue as string ?? d.WidthMode;
+        d.ToolbarHeight = (int)BarHeightSlider.Value;
+        d.ToolbarMargin = (int)BarMarginSlider.Value;
+        d.ShowClock = ClockCheckBox.IsChecked == true;
+        d.ShowLauncher = LauncherCheckBox.IsChecked == true;
+        d.ShowMonitorButton = MonitorButtonCheckBox.IsChecked == true;
+        d.ShowActiveThumbnail = ActiveThumbCheckBox.IsChecked == true;
+        string? nativeBar = NativeBarCombo.SelectedValue as string;
+        if (!string.IsNullOrEmpty(nativeBar))
+        {
+            config.General.TaskbarMode = nativeBar;
+            if (!string.Equals(ModeCombo.SelectedValue as string, nativeBar, StringComparison.Ordinal))
+            {
+                _loading = true;
+                ModeCombo.SelectedValue = nativeBar;
+                _loading = false;
+            }
+        }
+
         string monitor = MonitorCombo.SelectedValue as string ?? "primary";
         if (config.Dock.MonitorIds is null || config.Dock.MonitorIds.Count == 0)
         {
@@ -560,6 +648,46 @@ public partial class MainWindow : Window
     {
         HideDelaySlider.IsEnabled = AutoHideCheckBox.IsChecked == true;
         OnValueChanged();
+    }
+
+    /// <summary>
+    /// 切换条形态：dock 模式下列宽/时钟/启动台这些开关没有意义，直接置灰，
+    /// 避免用户改了半天发现"没反应"（M1 的 fullScreenHide 不生效就是这个体感）。
+    /// </summary>
+    private void OnBarModeChanged()
+    {
+        if (_loading)
+        {
+            return;
+        }
+
+        bool toolbar = string.Equals(BarModeCombo.SelectedValue as string, "toolbar",
+            StringComparison.OrdinalIgnoreCase);
+        BarWidthModeCombo.IsEnabled = toolbar;
+        BarHeightSlider.IsEnabled = toolbar;
+        BarMarginSlider.IsEnabled = toolbar;
+        ClockCheckBox.IsEnabled = toolbar;
+        LauncherCheckBox.IsEnabled = toolbar;
+        MonitorButtonCheckBox.IsEnabled = toolbar;
+        ActiveThumbCheckBox.IsEnabled = toolbar;
+        OnValueChanged();
+    }
+
+    /// <summary>「任务栏模式」与「原生任务栏」是同一个字段的两个入口，改一个要带回另一个。</summary>
+    private void SyncNativeBarFromMode()
+    {
+        if (_loading)
+        {
+            return;
+        }
+
+        string mode = ModeCombo.SelectedValue as string ?? "beautify";
+        if (!string.Equals(NativeBarCombo.SelectedValue as string, mode, StringComparison.Ordinal))
+        {
+            _loading = true;
+            NativeBarCombo.SelectedValue = mode;
+            _loading = false;
+        }
     }
 
     private void OnReflectionToggled()
@@ -620,6 +748,8 @@ public partial class MainWindow : Window
             config.Animation.SpeedMultiplier.ToString("0.00", System.Globalization.CultureInfo.CurrentCulture));
         HideDelayValue.Text = Loc.Instance.T("Settings_ValueMs", config.Behavior.HideDelayMs);
         MagnifyValue.Text = Loc.Instance.T("Settings_ValueTimes", config.Animation.MagnifyScale.ToString("0.00", System.Globalization.CultureInfo.CurrentCulture));
+        BarHeightValue.Text = Loc.Instance.T("Settings_ValuePx", d.ToolbarHeight);
+        BarMarginValue.Text = Loc.Instance.T("Settings_ValuePx", d.ToolbarMargin);
 
         byte alpha = (byte)Math.Round(Math.Clamp(a.Opacity, 0, 1) * 255);
         PreviewCapsule.Background = a.BackgroundMode switch

@@ -705,6 +705,36 @@ public static class SelfTest
                 // 7) 预览悬停延迟默认值贴近 macOS（250ms），不再是 500ms。
                 Check("预览悬停延迟默认 250ms", new DockConfig().Behavior.PreviewHoverDelayMs == 250);
 
+                // 8) M5：默认就是任务栏形态（产品目标是替代 Windows 任务栏）。
+                var m5 = new DockConfig();
+                Check("默认为任务栏形态", m5.Dock.Mode == "toolbar");
+                Check("任务栏默认铺满工作区", m5.Dock.WidthMode == "fill");
+                Check("任务栏高度/留白在可渲染范围",
+                    m5.Dock.ToolbarHeight is >= 44 and <= 96 && m5.Dock.ToolbarMargin >= 0,
+                    $"h={m5.Dock.ToolbarHeight} m={m5.Dock.ToolbarMargin}");
+                Check("任务栏段落默认全开",
+                    m5.Dock.ShowClock && m5.Dock.ShowLauncher
+                    && m5.Dock.ShowMonitorButton && m5.Dock.ShowActiveThumbnail);
+
+                // 9) 时钟格式非法时不能把整条 Dock 抛异常（用户可填任意格式串）。
+                Check("时钟格式容错（非法串有兜底）",
+                    typeof(MainWindow).GetMethod("FormatSafe",
+                        System.Reflection.BindingFlags.Instance
+                        | System.Reflection.BindingFlags.NonPublic) is not null);
+
+                // 10) 形态/宽度策略的非法值必须被夹回合法枚举，否则手改配置会得到空窗。
+                Check("形态枚举受校验", ConfigRanges.DockModes.Contains("toolbar")
+                    && ConfigRanges.DockModes.Contains("dock")
+                    && ConfigRanges.ToolbarWidthModes.Contains("fill"));
+
+                // 11) 亮/暗背景要走不同 tint（浅色壁纸前近白玻璃会整条隐形）。
+                Check("tint 支持强制深色", typeof(MainWindow).GetMethod("ResolveCapsuleTint",
+                    System.Reflection.BindingFlags.Static
+                    | System.Reflection.BindingFlags.NonPublic,
+                    null,
+                    new[] { typeof(double), typeof(bool) },
+                    null) is not null);
+
                 // 8) 真窗口验证「唤出保留原状态」：最小化的最大化窗口唤出后必须仍是最大化，
                 //    普通窗口也不能因为唤出被"顺手最大化"。旧实现固定用 SW_SHOWNORMAL，
                 //    会把最大化窗口还原成小窗（实机 bug：从预览面板点开变成小窗）。

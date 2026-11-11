@@ -327,4 +327,64 @@
   <data name="Tray_OverflowText" xml:space="preserve">
     <value>当前是「完全替换」模式，原生任务栏已隐藏，系统托盘的图标无处显示。点击此处切换到「精简共存」：保留任务栏托盘区，其余交给 Dock。</value>
   </data>
+  <data name="Monitor_Primary" xml:space="preserve">
+    <value>主显示器</value>
+  </data>
+  <data name="Monitor_Secondary" xml:space="preserve">
+    <value>副显示器</value>
+  </data>
+  <data name="Launcher_Search" xml:space="preserve">
+    <value>搜索应用</value>
+  </data>
+  <data name="Launcher_Loading" xml:space="preserve">
+    <value>正在加载应用…</value>
+  </data>
+  <data name="Launcher_Empty" xml:space="preserve">
+    <value>没有匹配的应用</value>
+  </data>
+  <data name="Settings_GroupToolbar" xml:space="preserve">
+    <value>任务栏</value>
+  </data>
+  <data name="Settings_BarMode" xml:space="preserve">
+    <value>形态</value>
+  </data>
+  <data name="Settings_BarModeDock" xml:space="preserve">
+    <value>Dock 胶囊（宽度自适应）</value>
+  </data>
+  <data name="Settings_BarModeToolbar" xml:space="preserve">
+    <value>任务栏（三段：窗口 / 时钟 / 图标）</value>
+  </data>
+  <data name="Settings_BarWidthMode" xml:space="preserve">
+    <value>任务栏宽度</value>
+  </data>
+  <data name="Settings_BarWidthFill" xml:space="preserve">
+    <value>铺满工作区</value>
+  </data>
+  <data name="Settings_BarWidthFit" xml:space="preserve">
+    <value>按内容自适应</value>
+  </data>
+  <data name="Settings_BarHeight" xml:space="preserve">
+    <value>条高度</value>
+  </data>
+  <data name="Settings_BarMargin" xml:space="preserve">
+    <value>左右留白</value>
+  </data>
+  <data name="Settings_ShowClock" xml:space="preserve">
+    <value>显示时钟与日期</value>
+  </data>
+  <data name="Settings_ShowLauncher" xml:space="preserve">
+    <value>显示启动台按钮</value>
+  </data>
+  <data name="Settings_ShowMonitorButton" xml:space="preserve">
+    <value>显示显示器按钮</value>
+  </data>
+  <data name="Settings_ShowActiveThumb" xml:space="preserve">
+    <value>显示当前窗口缩略图</value>
+  </data>
+  <data name="Settings_NativeBar" xml:space="preserve">
+    <value>原生任务栏</value>
+  </data>
+  <data name="Settings_NativeBarHint" xml:space="preserve">
+    <value>「完全接管」会隐藏系统任务栏，退出或崩溃时自动还原。</value>
+  </data>
 </root>

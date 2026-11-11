@@ -10,6 +10,40 @@
         SnapsToDevicePixels="True"
         UseLayoutRounding="True"
         Focusable="True">
+    <Window.Resources>
+        <!-- 任务栏小按钮（启动台 / 显示器 / 设置）：无边框、悬停高亮、圆角。
+             不用系统 Button 默认模板 —— 那套会带灰色渐变和边框，和玻璃条完全不搭。 -->
+        <Style x:Key="BarButton" TargetType="Button">
+            <Setter Property="Width" Value="40" />
+            <Setter Property="Height" Value="40" />
+            <Setter Property="Margin" Value="2,0" />
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Foreground" Value="#FFF2F4F8" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bg" Background="{TemplateBinding Background}"
+                                CornerRadius="10">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#26FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="#3DFFFFFF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
     <!-- Root.Margin 由代码按放大倍率动态设置，为 RenderTransform 留出溢出空间 -->
     <Grid x:Name="Root">
         <Border x:Name="Capsule"
@@ -30,8 +64,95 @@
                 <!-- 磨砂颗粒：macOS 玻璃的细噪点感；由代码生成 64×64 平铺，整体透明度极低 -->
                 <Border x:Name="NoiseLayer" Grid.RowSpan="2" IsHitTestVisible="False"
                         Background="Transparent" Opacity="0" />
-                <StackPanel x:Name="IconsPanel" Grid.Row="0" Orientation="Horizontal"
-                            VerticalAlignment="Bottom" />
+
+                <!-- 内容宿主：dock 模式下只有 IconsPanel；toolbar 模式下 IconsPanel 会被
+                     代码搬到 ToolbarRight 内部（WPF 一个元素只能有一个父容器）。 -->
+                <Grid x:Name="Body" Grid.Row="0">
+                    <!-- M5 三段任务栏：左（启动台/显示器/当前窗口）/ 中（时钟）/ 右（图标/托盘/设置）。
+                         左右两列都用 *，中列 Auto —— 这样时钟严格居中于整条任务栏。 -->
+                    <Grid x:Name="ToolbarGrid" Visibility="Collapsed">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel x:Name="ToolbarLeft" Grid.Column="0" Orientation="Horizontal"
+                                    HorizontalAlignment="Left" VerticalAlignment="Center">
+                            <Button x:Name="LauncherButton" Style="{StaticResource BarButton}"
+                                    Click="OnLauncherButtonClick" ToolTip="启动台">
+                                <Viewbox Width="19" Height="19">
+                                    <Canvas Width="20" Height="20">
+                                        <Path x:Name="LauncherGlyph" Fill="#FFF2F4F8"
+                                              Data="M2.5,2.5 H8.5 V8.5 H2.5 Z M11.5,2.5 H17.5 V8.5 H11.5 Z M2.5,11.5 H8.5 V17.5 H2.5 Z M11.5,11.5 H17.5 V17.5 H11.5 Z" />
+                                    </Canvas>
+                                </Viewbox>
+                            </Button>
+                            <Button x:Name="MonitorButton" Style="{StaticResource BarButton}"
+                                    Click="OnMonitorButtonClick" ToolTip="显示器">
+                                <Viewbox Width="19" Height="19">
+                                    <Canvas Width="20" Height="20">
+                                        <Path x:Name="MonitorGlyph" Stroke="#FFF2F4F8"
+                                              StrokeThickness="1.5" Fill="Transparent"
+                                              Data="M2.5,4 H17.5 V14 H2.5 Z" />
+                                        <Path x:Name="MonitorGlyph2" Stroke="#FFF2F4F8"
+                                              StrokeThickness="1.5"
+                                              Data="M7,17.5 H13 M10,14 V17.5" />
+                                    </Canvas>
+                                </Viewbox>
+                            </Button>
+                            <!-- 当前窗口实况缩略图：DWM 缩略图直接合成到这块矩形上，
+                                 WPF 只负责外围留白（缩略图是直角的，圆角裁不住）。 -->
+                            <Border x:Name="ActiveThumbHost" Width="88" Height="44"
+                                    Margin="4,0,2,0" CornerRadius="8" Background="#1AFFFFFF"
+                                    ClipToBounds="True" Cursor="Hand" Visibility="Collapsed"
+                                    MouseLeftButtonUp="OnActiveThumbClick">
+                                <TextBlock x:Name="ActiveThumbPlaceholder" Text="桌面"
+                                           FontSize="11" Opacity="0.55"
+                                           Foreground="#FFF2F4F8"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center" />
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel x:Name="ToolbarCenter" Grid.Column="1"
+                                    VerticalAlignment="Center" Margin="18,0">
+                            <TextBlock x:Name="ClockText" Text="00:00" FontSize="23"
+                                       FontWeight="SemiBold" Foreground="#FFF2F4F8"
+                                       HorizontalAlignment="Center" />
+                            <TextBlock x:Name="DateText" Text="2026/01/01" FontSize="10.5"
+                                       Opacity="0.72" Foreground="#FFF2F4F8"
+                                       HorizontalAlignment="Center" Margin="0,1,0,0" />
+                        </StackPanel>
+
+                        <!-- IconsPanel 会被代码 Insert 到本容器的第 0 位，
+                             所以「应用图标 → 分隔线 → 托盘 → 设置」的顺序天然成立。 -->
+                        <StackPanel x:Name="ToolbarRight" Grid.Column="2" Orientation="Horizontal"
+                                    HorizontalAlignment="Right" VerticalAlignment="Center">
+                            <Border x:Name="TrayDivider" Width="1" Height="24"
+                                    Background="#26FFFFFF" Margin="8,0,4,0"
+                                    Visibility="Collapsed" />
+                            <Button x:Name="SettingsButton" Style="{StaticResource BarButton}"
+                                    Click="OnSettingsButtonClick" ToolTip="设置">
+                                <Viewbox Width="18" Height="18">
+                                    <Canvas Width="24" Height="24">
+                                        <Path x:Name="SettingsGlyph" Stroke="#FFF2F4F8"
+                                              StrokeThickness="2" Fill="Transparent"
+                                              Data="M12.22,2 H11.78 A2,2 0 0,0 9.78,4 V4.18 A2,2 0 0,1 8.78,5.91 L8.35,6.16 A2,2 0 0,1 6.35,6.16 L6.2,6.08 A2,2 0 0,0 3.47,6.81 L3.25,7.19 A2,2 0 0,0 3.98,9.92 L4.13,10.02 A2,2 0 0,1 5.13,11.74 V12.25 A2,2 0 0,1 4.13,13.99 L3.98,14.08 A2,2 0 0,0 3.25,16.81 L3.47,17.19 A2,2 0 0,0 6.2,17.92 L6.35,17.84 A2,2 0 0,1 8.35,17.84 L8.78,18.09 A2,2 0 0,1 9.78,19.82 V20 A2,2 0 0,0 11.78,22 H12.22 A2,2 0 0,0 14.22,20 V19.82 A2,2 0 0,1 15.22,18.09 L15.65,17.84 A2,2 0 0,1 17.65,17.84 L17.8,17.92 A2,2 0 0,0 20.53,17.19 L20.75,16.81 A2,2 0 0,0 20.02,14.08 L19.87,13.99 A2,2 0 0,1 18.87,12.25 V11.74 A2,2 0 0,1 19.87,10 L20.02,9.91 A2,2 0 0,0 20.75,7.18 L20.53,6.8 A2,2 0 0,0 17.8,6.07 L17.65,6.15 A2,2 0 0,1 15.65,6.15 L15.22,5.9 A2,2 0 0,1 14.22,4.17 V4 A2,2 0 0,0 12.22,2 Z" />
+                                        <Path x:Name="SettingsGlyph2" Stroke="#FFF2F4F8"
+                                              StrokeThickness="2" Fill="Transparent"
+                                              Data="M15,12 A3,3 0 1,1 9,12 A3,3 0 1,1 15,12 Z" />
+                                    </Canvas>
+                                </Viewbox>
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- dock 模式：单行胶囊，宽度随条目数自适应。代码按位置设置对齐方式。 -->
+                    <StackPanel x:Name="IconsPanel" Orientation="Horizontal"
+                                VerticalAlignment="Bottom" />
+                </Grid>
+
                 <!-- FR-101 倒影：镜像底边一小段图标，强度/高度可调（默认关闭） -->
                 <Border x:Name="ReflectionHost" Grid.Row="1" Height="0" Visibility="Collapsed"
                         Margin="0,2,0,0" ClipToBounds="True" IsHitTestVisible="False">

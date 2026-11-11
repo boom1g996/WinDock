@@ -20,6 +20,46 @@
                 <ComboBox x:Name="PresetCombo" />
             </StackPanel>
 
+            <!-- 任务栏（M5）：形态与段落开关 -->
+            <GroupBox x:Name="ToolbarGroup" Padding="10" Margin="0,0,0,12">
+                <StackPanel>
+                    <StackPanel Margin="0,6">
+                        <TextBlock x:Name="BarModeLabel" Margin="0,0,0,4" />
+                        <ComboBox x:Name="BarModeCombo" />
+                    </StackPanel>
+                    <StackPanel Margin="0,6">
+                        <TextBlock x:Name="BarWidthModeLabel" Margin="0,0,0,4" />
+                        <ComboBox x:Name="BarWidthModeCombo" />
+                    </StackPanel>
+                    <StackPanel Margin="0,6">
+                        <DockPanel>
+                            <TextBlock x:Name="BarHeightLabel" />
+                            <TextBlock x:Name="BarHeightValue" DockPanel.Dock="Right" HorizontalAlignment="Right" />
+                        </DockPanel>
+                        <Slider x:Name="BarHeightSlider" Minimum="44" Maximum="96"
+                                TickFrequency="1" IsSnapToTickEnabled="True" />
+                    </StackPanel>
+                    <StackPanel Margin="0,6">
+                        <DockPanel>
+                            <TextBlock x:Name="BarMarginLabel" />
+                            <TextBlock x:Name="BarMarginValue" DockPanel.Dock="Right" HorizontalAlignment="Right" />
+                        </DockPanel>
+                        <Slider x:Name="BarMarginSlider" Minimum="0" Maximum="120"
+                                TickFrequency="2" IsSnapToTickEnabled="True" />
+                    </StackPanel>
+                    <CheckBox x:Name="ClockCheckBox" Margin="0,8,0,4" />
+                    <CheckBox x:Name="LauncherCheckBox" Margin="0,4" />
+                    <CheckBox x:Name="MonitorButtonCheckBox" Margin="0,4" />
+                    <CheckBox x:Name="ActiveThumbCheckBox" Margin="0,4" />
+                    <StackPanel Margin="0,8,0,2">
+                        <TextBlock x:Name="NativeBarLabel" Margin="0,0,0,4" />
+                        <ComboBox x:Name="NativeBarCombo" />
+                        <TextBlock x:Name="NativeBarHint" Opacity="0.65" FontSize="11"
+                                   TextWrapping="Wrap" Margin="0,4,0,0" />
+                    </StackPanel>
+                </StackPanel>
+            </GroupBox>
+
             <!-- 布局 -->
             <GroupBox x:Name="LayoutGroup" Padding="10" Margin="0,0,0,12">
                 <StackPanel>

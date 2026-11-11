@@ -109,6 +109,25 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     /// <summary>SyncWindowSize 的重入保护：设置 Width/Height 会同步触发布局回调。</summary>
     private bool _syncingSize;
 
+    // ---- M5 任务栏形态 ---------------------------------------------------
+
+    /// <summary>时钟定时器：按整分对齐，不是 1s 轮询（空闲 CPU 预算只有 0.3%）。</summary>
+    private DispatcherTimer? _clockTimer;
+
+    /// <summary>启动台面板：常驻复用，关闭只做 Hide（BAML + 建窗一次约 100ms）。</summary>
+    private LauncherWindow? _launcherWindow;
+
+    /// <summary>左段当前窗口实况缩略图（DWM，跟随前台窗口）。</summary>
+    private ActiveThumbnailService? _activeThumb;
+
+    /// <summary>任务栏前景是否已按玻璃明暗设过（避免每次布局都重建画刷）。</summary>
+    private bool _barForegroundSet;
+    private bool _barForegroundDark = true;
+
+    /// <summary>实际生效的 tint 浓度与背景明暗（亮背景下 tint 会被抬到可见下限）。</summary>
+    private double _effectiveTint = 0.3;
+    private bool _effectiveTintLight;
+
     /// <param name="monitorOverride">
     /// 6.7 多显示器：副屏 Dock 传该屏的 monitor id（"1"/"2"…）；
     /// null 表示跟随配置 Dock.MonitorIds[0]。
@@ -167,6 +186,9 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
 
             // 胶囊尺寸变了，玻璃的抓取矩形也过期了（去抖，滑入动画期间不会抓）。
             ScheduleGlassRefresh();
+
+            // 缩略图的目标矩形跟着布局走，否则条一变宽，预览就画错位置。
+            UpdateActiveThumbnailRect();
         };
 
         ApplyConfig(_current);
@@ -200,12 +222,37 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         _syncingSize = true;
         try
         {
-            // 不限宽高测量内容：StackPanel 会把所有图标铺开，得到"装得下全部条目"的尺寸。
-            // Root.Margin 不在 DesiredSize 里（Margin 由父布局消费），必须自己加回来。
-            Root.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            Size content = Root.DesiredSize;
-            double w = Math.Ceiling(content.Width + Root.Margin.Left + Root.Margin.Right);
-            double h = Math.Ceiling(content.Height + Root.Margin.Top + Root.Margin.Bottom);
+            double w;
+            double h;
+            Size content;
+
+            if (IsToolbar)
+            {
+                // toolbar 模式：宽度由工作区决定（不能按内容 —— 内容只有几百 DIP，
+                // 按内容测出来的就是原来那条"很窄的胶囊"）。高度仍按内容，但不少于配置值。
+                Capsule.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                content = Capsule.DesiredSize;
+                double capsuleHeight = Math.Max(_current.Dock.ToolbarHeight,
+                    Math.Ceiling(content.Height));
+
+                bool fit = string.Equals(_current.Dock.WidthMode, "fit",
+                    StringComparison.OrdinalIgnoreCase);
+                double capsuleWidth = fit
+                    ? Math.Ceiling(content.Width)
+                    : Math.Max(240, ResolveWorkArea().Width - (2 * _current.Dock.ToolbarMargin));
+
+                w = Math.Ceiling(capsuleWidth + Root.Margin.Left + Root.Margin.Right);
+                h = Math.Ceiling(capsuleHeight + Root.Margin.Top + Root.Margin.Bottom);
+            }
+            else
+            {
+                // 不限宽高测量内容：StackPanel 会把所有图标铺开，得到"装得下全部条目"的尺寸。
+                // Root.Margin 不在 DesiredSize 里（Margin 由父布局消费），必须自己加回来。
+                Root.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                content = Root.DesiredSize;
+                w = Math.Ceiling(content.Width + Root.Margin.Left + Root.Margin.Right);
+                h = Math.Ceiling(content.Height + Root.Margin.Top + Root.Margin.Bottom);
+            }
 
             // 未完成首次布局时可能拿到 NaN/Infinity/0：保持上一次可用尺寸，不要写成 0。
             if (!(w >= 1) || !(h >= 1) || double.IsInfinity(w) || double.IsInfinity(h))
@@ -230,7 +277,8 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
 
             if (changed)
             {
-                _log.Info(Module, $"窗口尺寸同步：content=({content.Width:F1},{content.Height:F1}) " +
+                _log.Info(Module, $"窗口尺寸同步：mode={(IsToolbar ? "toolbar" : "dock")} " +
+                                  $"content=({content.Width:F1},{content.Height:F1}) " +
                                   $"margin=({Root.Margin.Left:F1},{Root.Margin.Top:F1}," +
                                   $"{Root.Margin.Right:F1},{Root.Margin.Bottom:F1}) " +
                                   $"-> {w:F1}x{h:F1}（条目 {_iconControls.Count}）");
@@ -250,6 +298,11 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     public void CloseForShutdown()
     {
         ClosePreview();
+        _launcherWindow?.Close();
+        _launcherWindow = null;
+        _clockTimer?.Stop();
+        _activeThumb?.Dispose();
+        _activeThumb = null;
         _animation.Frame -= OnAnimationFrame;
         Close();
     }
@@ -363,6 +416,36 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     /// <summary>WD-022：左/右位置时 Dock 垂直排列，隐藏方向改为水平滑出。</summary>
     private bool IsVertical => _current.Dock.Position is "left" or "right";
 
+    /// <summary>
+    /// M5：是否处于三段任务栏形态。toolbar 模式只允许贴底（左/右/顶的语义是 Dock 专用），
+    /// 宽度按工作区算、时钟与左段出现、图标迁到右段。
+    /// </summary>
+    private bool IsToolbar =>
+        string.Equals(_current.Dock.Mode, "toolbar", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// 当前 Dock 所在屏幕的工作区（DIP）。
+    /// DW-021：配置了非主屏（MonitorIds[0] = "1"/"2"…）时用该屏；否则用主屏工作区
+    /// （<see cref="SystemParameters.WorkArea"/> 已按 DIP 且自动排除原生任务栏）。
+    /// </summary>
+    private Rect ResolveWorkArea()
+    {
+        Rect work = SystemParameters.WorkArea;
+        string? monitorId = _monitorOverride ?? _current.Dock.MonitorIds?.FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(monitorId)
+            && !string.Equals(monitorId, "primary", StringComparison.OrdinalIgnoreCase))
+        {
+            WinDock.Core.Services.DipRect dip =
+                WinDock.Core.Services.MonitorService.ResolveWorkArea(monitorId, out bool isPrimary);
+            if (!isPrimary)
+            {
+                work = new Rect(dip.Left, dip.Top, dip.Width, dip.Height);
+            }
+        }
+
+        return work;
+    }
+
     public double HiddenDistance => (IsVertical
         ? (Width > 0 ? Width : ActualWidth > 0 ? ActualWidth : 126)
         : (Height > 0 ? Height : ActualHeight > 0 ? ActualHeight : 126)) + 8;
@@ -431,6 +514,11 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         if (!visible)
         {
             ClosePreview();
+            // 启动台是挂在任务栏上的独立窗口，条收起来时必须一起收，
+            // 否则会留下一个悬空的面板（点它也不会回到 Dock）。
+            _launcherWindow?.ClosePanel();
+            // 条不可见时 DWM 缩略图别继续画（会留在屏幕上变成一块残留画面）。
+            _activeThumb?.SetDestination(new Rect(0, 0, 0, 0), false);
         }
 
         // K-22 记录：本窗口 SizeToContent="WidthAndContent"，任何 Visibility 非 Visible
@@ -583,20 +671,46 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         ApplyMaterial(config.Appearance, config.Dock);
 
         double grow = config.Dock.IconSize * (config.Animation.MagnifyScale - 1);
-        bool vertical = IsVertical;
+        bool toolbar = IsToolbar;
+        bool vertical = !toolbar && IsVertical;
+
+        // 先把 IconsPanel 放到正确的容器里：toolbar 模式在 ToolbarRight 内部（应用图标在最左，
+        // 之后才是托盘与设置）；dock 模式回到 Body，独占整条。
+        ApplyLayoutMode(toolbar);
+        ApplyToolbarSections(config, toolbar);
+
         IconsPanel.Orientation = vertical ? Orientation.Vertical : Orientation.Horizontal;
-        IconsPanel.VerticalAlignment = vertical ? VerticalAlignment.Center : VerticalAlignment.Bottom;
+        IconsPanel.VerticalAlignment = toolbar
+            ? VerticalAlignment.Center
+            : vertical ? VerticalAlignment.Center : VerticalAlignment.Bottom;
+        IconsPanel.HorizontalAlignment = toolbar
+            ? HorizontalAlignment.Right
+            : HorizontalAlignment.Center;
+        IconsPanel.Margin = toolbar ? new Thickness(0, 0, 4, 0) : new Thickness(0);
+
         Capsule.VerticalAlignment = vertical ? VerticalAlignment.Center : VerticalAlignment.Bottom;
-        Capsule.HorizontalAlignment = config.Dock.Position switch
-        {
-            "left" => HorizontalAlignment.Left,
-            "right" => HorizontalAlignment.Right,
-            _ => HorizontalAlignment.Center,
-        };
+        // toolbar 模式必须 Stretch：Capsule 一旦按内容自适应，就只有"装得下图标"那么宽，
+        // 窗口是工作区宽、玻璃却只有中间一截（实测 1795 窗口里只画了 1047 的胶囊）。
+        Capsule.HorizontalAlignment = toolbar
+            ? HorizontalAlignment.Stretch
+            : config.Dock.Position switch
+            {
+                "left" => HorizontalAlignment.Left,
+                "right" => HorizontalAlignment.Right,
+                _ => HorizontalAlignment.Center,
+            };
+        Capsule.Padding = toolbar
+            ? new Thickness(8, 4, 8, 4)
+            : new Thickness(config.Dock.Padding);
+        Capsule.MinHeight = toolbar ? Math.Max(40, config.Dock.ToolbarHeight) : 0;
+
         // 垂直 Dock 放大沿水平方向生长，需要左右留白；底部 Dock 向上生长，顶部留白。
-        Root.Margin = vertical
-            ? new Thickness(grow + 14, grow / 2 + 10, grow + 14, grow / 2 + 10)
-            : new Thickness(grow / 2 + 10, grow + 12, grow / 2 + 10, 0);
+        // toolbar 模式底部不留白（条的可见下沿要贴住 offsetFromEdge），左右只留放大溢出量。
+        Root.Margin = toolbar
+            ? new Thickness(grow / 2 + 6, grow + 10, grow / 2 + 6, 0)
+            : vertical
+                ? new Thickness(grow + 14, grow / 2 + 10, grow + 14, grow / 2 + 10)
+                : new Thickness(grow / 2 + 10, grow + 12, grow / 2 + 10, 0);
 
         bool reduced = config.Animation.RespectReducedMotion
                        && NativeMethods.IsReducedMotionEnabled();
@@ -621,6 +735,322 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(Position));
         ApplyBackdrop();
         UpdatePresenceWatcher(IsDockVisible); // 自动隐藏开关可能刚被改
+
+        UpdateClockSchedule(config, toolbar);
+        SyncActiveThumbnail(config, toolbar);
+    }
+
+    // ---- M5 任务栏形态 ---------------------------------------------------
+
+    /// <summary>设置窗口请求（组合根订阅后打开 WinDock.Settings.exe）。</summary>
+    public event EventHandler? SettingsRequested;
+
+    /// <summary>
+    /// 把 IconsPanel 在两个容器之间迁移。
+    /// </summary>
+    /// <remarks>
+    /// WPF 的一个元素只能有一个父容器，所以不能靠 Visibility 切换两个副本 ——
+    /// 那样每次配置热更都要整树重建，图标会闪。这里直接搬父容器，控件实例不变，
+    /// 拖拽控制器缓存的 <c>IconsPanel</c> 引用依然有效。
+    /// </remarks>
+    private void ApplyLayoutMode(bool toolbar)
+    {
+        var parent = IconsPanel.Parent as Panel;
+        if (toolbar)
+        {
+            if (!ReferenceEquals(parent, ToolbarRight))
+            {
+                parent?.Children.Remove(IconsPanel);
+                ToolbarRight.Children.Insert(0, IconsPanel);
+            }
+
+            ToolbarGrid.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            if (!ReferenceEquals(parent, Body))
+            {
+                parent?.Children.Remove(IconsPanel);
+                Body.Children.Add(IconsPanel);
+            }
+
+            ToolbarGrid.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void ApplyToolbarSections(DockConfig config, bool toolbar)
+    {
+        if (!toolbar)
+        {
+            return; // 整块由 ToolbarGrid 的 Visibility 控制，段内控件状态留到下次进入时再刷
+        }
+
+        LauncherButton.Visibility = config.Dock.ShowLauncher
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        MonitorButton.Visibility = config.Dock.ShowMonitorButton
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        ToolbarCenter.Visibility = config.Dock.ShowClock
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+        TrayDivider.Visibility = Visibility.Visible;
+        UpdateClock();
+    }
+
+    /// <summary>
+    /// 时钟：按「距离下一整分」定时，而不是 1s 轮询。
+    /// </summary>
+    /// <remarks>
+    /// 1s 定时器在 24h 内要醒 86400 次，对空闲 CPU 是纯浪费（AC-20 只有 0.3% 的预算）。
+    /// 分钟级时间显示只需对齐整分：每次触发后再算下一次的间隔，误差不累积。
+    /// </remarks>
+    private void UpdateClockSchedule(DockConfig config, bool toolbar)
+    {
+        if (!toolbar || !config.Dock.ShowClock)
+        {
+            _clockTimer?.Stop();
+            return;
+        }
+
+        _clockTimer ??= new DispatcherTimer(DispatcherPriority.Background);
+        _clockTimer.Tick -= OnClockTick;
+        _clockTimer.Tick += OnClockTick;
+        ScheduleNextClockTick();
+    }
+
+    private void OnClockTick(object? sender, EventArgs e)
+    {
+        UpdateClock();
+        ScheduleNextClockTick();
+    }
+
+    private void ScheduleNextClockTick()
+    {
+        if (_clockTimer is null)
+        {
+            return;
+        }
+
+        _clockTimer.Stop();
+        DateTime now = DateTime.Now;
+        DateTime next = new DateTime(now.Year, now.Month, now.Day, now.Hour, now.Minute, 0)
+            .AddMinutes(1);
+        TimeSpan wait = next - now;
+        if (wait < TimeSpan.FromMilliseconds(200))
+        {
+            wait = TimeSpan.FromMilliseconds(200);
+        }
+
+        // 多等 120ms：避免系统时间刚好在边界时算出 0 间隔，把自己跑成忙等。
+        _clockTimer.Interval = wait + TimeSpan.FromMilliseconds(120);
+        _clockTimer.Start();
+    }
+
+    private void UpdateClock()
+    {
+        DateTime now = DateTime.Now;
+        ClockText.Text = FormatSafe(now, _current.Dock.ClockFormat, "HH:mm");
+        DateText.Text = FormatSafe(now, _current.Dock.DateFormat, "yyyy/MM/dd");
+    }
+
+    /// <summary>用户可填任意格式串；非法格式不能让整条 Dock 崩掉。</summary>
+    private string FormatSafe(DateTime value, string format, string fallback)
+    {
+        try
+        {
+            return string.IsNullOrWhiteSpace(format)
+                ? value.ToString(fallback, System.Globalization.CultureInfo.InvariantCulture)
+                : value.ToString(format, System.Globalization.CultureInfo.CurrentCulture);
+        }
+        catch (FormatException)
+        {
+            return value.ToString(fallback, System.Globalization.CultureInfo.InvariantCulture);
+        }
+    }
+
+    private void OnSettingsButtonClick(object sender, RoutedEventArgs e)
+        => SettingsRequested?.Invoke(this, EventArgs.Empty);
+
+    private void OnLauncherButtonClick(object sender, RoutedEventArgs e) => ToggleLauncher();
+
+    /// <summary>
+    /// 显示器按钮：多屏时弹出「把任务栏放到哪块屏」，单屏时打开系统显示设置。
+    /// 切换只改 <c>dock.monitorIds[0]</c>，由配置服务持久化并热重载。
+    /// </summary>
+    private void OnMonitorButtonClick(object sender, RoutedEventArgs e)
+    {
+        IReadOnlyList<WinDock.Core.Services.DisplayMonitor> monitors =
+            WinDock.Core.Services.MonitorService.GetMonitors();
+
+        if (monitors.Count <= 1)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                    "ms-settings:display") { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                _log.Warn(Module, "打开显示设置失败：" + ex.Message);
+            }
+
+            return;
+        }
+
+        string current = _monitorOverride ?? _current.Dock.MonitorIds?.FirstOrDefault() ?? "primary";
+        var menu = new ContextMenu();
+        for (int i = 0; i < monitors.Count; i++)
+        {
+            WinDock.Core.Services.DisplayMonitor m = monitors[i];
+            string id = m.IsPrimary ? "primary" : i.ToString();
+            var item = new MenuItem
+            {
+                Header = m.IsPrimary
+                    ? $"{Loc.Instance.T("Monitor_Primary")}（{m.Right - m.Left}×{m.Bottom - m.Top}）"
+                    : $"{Loc.Instance.T("Monitor_Secondary")} {i}（{m.Right - m.Left}×{m.Bottom - m.Top}）",
+                IsCheckable = true,
+                IsChecked = string.Equals(id, current, StringComparison.OrdinalIgnoreCase),
+            };
+            string target = id;
+            item.Click += (_, _) => MoveToMonitor(target);
+            menu.Items.Add(item);
+        }
+
+        menu.PlacementTarget = MonitorButton;
+        menu.IsOpen = true;
+    }
+
+    private void MoveToMonitor(string monitorId)
+    {
+        if (string.Equals(monitorId, _current.Dock.MonitorIds?.FirstOrDefault(),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var next = _config.Current;
+        next.Dock.MonitorIds = new List<string> { monitorId };
+        try
+        {
+            _config.Save(next);
+        }
+        catch (Exception ex)
+        {
+            _log.Warn(Module, "保存显示器选择失败：" + ex.Message);
+        }
+    }
+
+    /// <summary>点当前窗口缩略图：把该窗口切到前台（已在前台则最小化）。</summary>
+    private void OnActiveThumbClick(object sender, MouseButtonEventArgs e)
+    {
+        IntPtr target = _activeThumb?.TargetWindow ?? IntPtr.Zero;
+        if (target == IntPtr.Zero)
+        {
+            return;
+        }
+
+        if (NativeMethods.IsIconic(target))
+        {
+            NativeMethods.ShowWindow(target, NativeMethods.SW_RESTORE);
+            return;
+        }
+
+        NativeMethods.SetForegroundWindow(target);
+    }
+
+    /// <summary>
+    /// 左段缩略图的开关与目标矩形同步。
+    /// </summary>
+    /// <remarks>
+    /// DWM 缩略图是**直接合成到宿主窗口的最上层**，圆角裁剪、Z 序都不受 WPF 控制。
+    /// 所以目标矩形必须逐像素对准 <c>ActiveThumbHost</c>，内缩 1px 是为了不和
+    /// Border 的描边打架（描边在内、缩略图盖上去会吃掉那一圈）。
+    /// </remarks>
+    private void SyncActiveThumbnail(DockConfig config, bool toolbar)
+    {
+        bool want = toolbar && config.Dock.ShowActiveThumbnail
+                    && !config.Appearance.PerformanceMode;
+        if (!want)
+        {
+            ActiveThumbHost.Visibility = Visibility.Collapsed;
+            _activeThumb?.SetDestination(new Rect(0, 0, 0, 0), false);
+            return;
+        }
+
+        ActiveThumbHost.Visibility = Visibility.Visible;
+        if (_activeThumb is null)
+        {
+            _activeThumb = new ActiveThumbnailService(_log, Dispatcher);
+            _activeThumb.TargetChanged += (_, _) => UpdateActiveThumbnailVisual();
+            IntPtr handle = new WindowInteropHelper(this).Handle;
+            if (handle != IntPtr.Zero)
+            {
+                _activeThumb.Attach(handle);
+            }
+        }
+
+        UpdateActiveThumbnailVisual();
+    }
+
+    private void UpdateActiveThumbnailVisual()
+    {
+        bool hasTarget = _activeThumb is { IsAvailable: true, TargetWindow: not 0 };
+        ActiveThumbPlaceholder.Visibility = hasTarget
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+        UpdateActiveThumbnailRect();
+    }
+
+    /// <summary>把 Border 的屏幕位置换算成宿主窗口客户区像素矩形，交给 DWM。</summary>
+    private void UpdateActiveThumbnailRect()
+    {
+        if (_activeThumb is null || !ActiveThumbHost.IsVisible
+            || ActiveThumbHost.ActualWidth < 4 || ActiveThumbHost.ActualHeight < 4)
+        {
+            return;
+        }
+
+        try
+        {
+            Point topLeft = ActiveThumbHost.TransformToAncestor(this).Transform(new Point(0, 0));
+            DpiScale dpi = VisualTreeHelper.GetDpi(this);
+            var rect = new Rect(
+                Math.Round(topLeft.X * dpi.DpiScaleX) + 1,
+                Math.Round(topLeft.Y * dpi.DpiScaleY) + 1,
+                Math.Max(1, Math.Round(ActiveThumbHost.ActualWidth * dpi.DpiScaleX) - 2),
+                Math.Max(1, Math.Round(ActiveThumbHost.ActualHeight * dpi.DpiScaleY) - 2));
+            _activeThumb.SetDestination(rect, true);
+        }
+        catch (InvalidOperationException)
+        {
+            // 尚未连接到 PresentationSource（首帧之前），下一次布局回调再算。
+        }
+    }
+
+    /// <summary>
+    /// 启动台：常驻面板，第一次点开时创建，之后只做显隐。
+    /// </summary>
+    private void ToggleLauncher()
+    {
+        if (_launcherWindow?.IsOpen == true)
+        {
+            _launcherWindow.ClosePanel();
+            return;
+        }
+
+        _launcherWindow ??= new LauncherWindow(_icons, _launcher, _log, _current);
+        Point anchor = ToolbarCenter.TransformToAncestor(this).Transform(new Point(0, 0));
+        IntPtr hwnd = new WindowInteropHelper(this).Handle;
+        if (!NativeMethods.GetWindowRect(hwnd, out NativeMethods.RECT rect))
+        {
+            return;
+        }
+
+        double scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
+        double anchorScreenX = (rect.Left / scale) + anchor.X + (ToolbarCenter.ActualWidth / 2);
+        double anchorScreenY = (rect.Top / scale) + anchor.Y;
+        _launcherWindow.Open(anchorScreenX, anchorScreenY);
     }
 
     /// <summary>窗口枚举事件 / 配置变更后的重建入口（UI 线程安全）。</summary>
@@ -1695,21 +2125,19 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
 
         // 默认主屏用 SystemParameters.WorkArea（按 DIP 且自动排除原生任务栏）；
         // WD-021：配置了非主屏（MonitorIds[0] = "1"/"2"…）时改用该显示器工作区。
-        Rect work = SystemParameters.WorkArea;
-        string? monitorId = _monitorOverride ?? _current.Dock.MonitorIds?.FirstOrDefault();
-        if (!string.IsNullOrWhiteSpace(monitorId)
-            && !string.Equals(monitorId, "primary", StringComparison.OrdinalIgnoreCase))
-        {
-            WinDock.Core.Services.DipRect dip =
-                WinDock.Core.Services.MonitorService.ResolveWorkArea(monitorId, out bool isPrimary);
-            if (!isPrimary)
-            {
-                work = new Rect(dip.Left, dip.Top, dip.Width, dip.Height);
-            }
-        }
-
+        Rect work = ResolveWorkArea();
         string position = _current.Dock.Position;
-        if (position is "left" or "right")
+
+        if (IsToolbar)
+        {
+            // M5：任务栏恒贴底、横向居中。左边界用「工作区左 + 留白 - Root.Margin.Left」，
+            // 这样 Capsule 的可见左边缘刚好落在 work.Left + ToolbarMargin 上。
+            _baseLeft = work.Left + _current.Dock.ToolbarMargin - Root.Margin.Left;
+            _baseTop = work.Bottom - winHeight - _current.Dock.OffsetFromEdge;
+            Left = _baseLeft;
+            Top = _baseTop + _slideOffset;
+        }
+        else if (position is "left" or "right")
         {
             // WD-022：垂直居中、贴左/贴右；滑入滑出沿水平方向。
             _baseLeft = position == "left"
@@ -1916,11 +2344,36 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
                 $"cap=({Capsule.ActualWidth:F1}x{Capsule.ActualHeight:F1}) " +
                 $"panel=({IconsPanel.ActualWidth:F1}x{IconsPanel.ActualHeight:F1}) " +
                 $"children={IconsPanel.Children.Count} vis={Visibility} " +
+                // M5：三段任务栏的段落矩形（DIP，相对窗口）。只有 toolbar 模式才有意义，
+                // 用它验证「时钟真居中 / 左段贴左 / 右段贴右」，不需要目视。
+                $"| segs={DescribeSection(ToolbarLeft, dpi)},{DescribeSection(ToolbarCenter, dpi)}," +
+                $"{DescribeSection(ToolbarRight, dpi)} " +
                 string.Join(' ', parts));
         }
         catch (Exception ex)
         {
             _log.Warn("Layout", $"导出图标布局失败：{ex.Message}");
+        }
+    }
+
+    /// <summary>把某个段落换算成「窗口内 DIP 矩形」，用于布局自证。</summary>
+    private string DescribeSection(FrameworkElement element, DpiScale dpi)
+    {
+        if (!element.IsVisible || element.ActualWidth <= 0)
+        {
+            return "hidden";
+        }
+
+        try
+        {
+            Point origin = element.TransformToAncestor(this).Transform(new Point(0, 0));
+            return $"({origin.X * dpi.DpiScaleX:F0},{(int)Math.Round(origin.Y * dpi.DpiScaleY)}," +
+                   $"{element.ActualWidth * dpi.DpiScaleX:F0}x" +
+                   $"{element.ActualHeight * dpi.DpiScaleY:F0})";
+        }
+        catch (InvalidOperationException)
+        {
+            return "detached";
         }
     }
 
@@ -2045,6 +2498,10 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
 
         ApplyIconAccent();
         ApplyBackdrop();
+        // 材质变了，前景色要按新的 tint 重算（玻璃抓回来后还会用真实亮度再校一次）。
+        // 没有抓屏结果时只能按系统主题估：浅色主题的 tint 近白、深色主题的近黑。
+        _barForegroundSet = false;
+        ApplyBarForeground(IsLightTheme());
         // 材质/尺寸/位置都可能变了，玻璃需要重抓（去抖，避免布局期反复抓屏）。
         ScheduleGlassRefresh(force: true);
     }
@@ -2056,25 +2513,39 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     /// 只读 HKCU 的 <c>SystemUsesLightTheme</c>，不写、不触发设置变更广播。
     /// 读取失败一律按深色处理（默认主题）。
     /// </remarks>
-    private static Color ResolveCapsuleTint(double alpha)
+    private static Color ResolveCapsuleTint(double alpha) => ResolveCapsuleTint(alpha, false);
+
+    /// <summary>
+    /// 胶囊 tint 色。
+    /// </summary>
+    /// <param name="forceDark">
+    /// true 表示忽略系统主题、强制用深色 tint。
+    /// 浅色壁纸（或大片白色窗口）后面铺近白色玻璃，整条任务栏与背景只差几个色阶，
+    /// 实测「看得见但看不见」（玻璃、边框、白字全隐形）。这种背景必须反过来给深色 tint。
+    /// </param>
+    private static Color ResolveCapsuleTint(double alpha, bool forceDark)
     {
         byte a = (byte)Math.Round(Math.Clamp(alpha, 0, 1) * 255);
-        bool light;
+        bool light = !forceDark && IsLightTheme();
+        return light
+            ? Color.FromArgb(a, 0xF2, 0xF5, 0xFA)
+            : Color.FromArgb(a, 0x0E, 0x10, 0x16);
+    }
+
+    /// <summary>系统是否浅色主题（读失败按深色处理，和 tint 的兜底一致）。</summary>
+    private static bool IsLightTheme()
+    {
         try
         {
-            light = NativeMethods.ReadDword(
+            return NativeMethods.ReadDword(
                 @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
                 "SystemUsesLightTheme") == 1;
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception
                                        or ArgumentException or InvalidOperationException)
         {
-            light = false;
+            return false;
         }
-
-        return light
-            ? Color.FromArgb(a, 0xF2, 0xF5, 0xFA)
-            : Color.FromArgb(a, 0x0E, 0x10, 0x16);
     }
 
     /// <summary>
@@ -2450,12 +2921,119 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         brush.Freeze();
 
         Capsule.Background = brush;
+
+        // 背景亮度决定三件事：tint 深浅、描边颜色、前景色。
+        // 白窗口/浅色壁纸前铺近白玻璃，实测整条任务栏与背景只差 5 个色阶 ——
+        // 玻璃、边框、白字全部隐形，看起来"任务栏根本不存在"。
+        double luma = SampleLuminance(blurred);
+        bool lightBackdrop = luma > 0.55;
+
+        double tintAlpha = lightBackdrop ? Math.Max(_tintAlpha, 0.42) : _tintAlpha;
+        _effectiveTint = tintAlpha;
+        _effectiveTintLight = lightBackdrop;
+
         // 薄 tint 叠在模糊图上：太少图标会糊在背景里，太多就成了深色板。
-        TintLayer.Background = new SolidColorBrush(ResolveCapsuleTint(_tintAlpha));
+        TintLayer.Background = new SolidColorBrush(
+            ResolveCapsuleTint(tintAlpha, forceDark: lightBackdrop));
+        Capsule.BorderBrush = lightBackdrop
+            ? new SolidColorBrush(Color.FromArgb(0x33, 0x00, 0x00, 0x00))
+            : ParseBorderBrush(_current.Appearance.BorderColor);
 
         // 抓屏期间窗口被 SW_HIDE 过：WPF 的呈现目标会停摆，SW_SHOW 之后
         // 不一定自己重绘（实测表现为"窗口可见但画面空白"），这里强制一帧。
         InvalidateVisual();
+
+        ApplyBarForeground(lightBackdrop);
+    }
+
+    /// <summary>
+    /// 任务栏前景色自适应：亮背景配深色前景，暗背景配浅色前景。
+    /// </summary>
+    /// <remarks>
+    /// 不能只看系统主题 —— 深色主题 + 白色壁纸同样是亮背景（毛玻璃会把壁纸的亮带上来），
+    /// 这时白字彻底看不见。判定依据是「模糊背景 + tint」的合成亮度。
+    /// </remarks>
+    private void ApplyBarForeground(bool lightBackdrop)
+    {
+        bool darkGlass = !lightBackdrop;
+        if (_barForegroundSet && _barForegroundDark == darkGlass)
+        {
+            return;
+        }
+
+        _barForegroundDark = darkGlass;
+        _barForegroundSet = true;
+
+        Color color = darkGlass
+            ? Color.FromRgb(0xF2, 0xF4, 0xF8)
+            : Color.FromRgb(0x1B, 0x1D, 0x23);
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+
+        LauncherGlyph.Fill = brush;
+        MonitorGlyph.Stroke = brush;
+        MonitorGlyph2.Stroke = brush;
+        SettingsGlyph.Stroke = brush;
+        SettingsGlyph2.Stroke = brush;
+        ClockText.Foreground = brush;
+        DateText.Foreground = brush;
+        ActiveThumbPlaceholder.Foreground = brush;
+
+        var divider = new SolidColorBrush(darkGlass
+            ? Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF)
+            : Color.FromArgb(0x2E, 0x00, 0x00, 0x00));
+        divider.Freeze();
+        TrayDivider.Background = divider;
+    }
+
+    /// <summary>
+    /// 采样模糊图的平均亮度（0~1）。
+    /// 只取若干行的若干点就够 —— 玻璃本身就是模糊的，整幅求平均和小样本没有可见差异。
+    /// </summary>
+    private static double SampleLuminance(BitmapSource source)
+    {
+        int w = source.PixelWidth;
+        int h = source.PixelHeight;
+        if (w < 1 || h < 1)
+        {
+            return 0.5;
+        }
+
+        BitmapSource src = source.Format == PixelFormats.Bgra32
+                           || source.Format == PixelFormats.Bgr32
+            ? source
+            : new FormatConvertedBitmap(source, PixelFormats.Bgra32, null, 0);
+
+        int stride = src.PixelWidth * 4;
+        var row = new byte[stride];
+        int stepX = Math.Max(1, w / 32);
+        double sum = 0;
+        int count = 0;
+
+        const int rows = 48;
+        for (int i = 0; i < rows; i++)
+        {
+            int y = Math.Min(h - 1, (int)((i + 0.5) * h / rows));
+            try
+            {
+                src.CopyPixels(new Int32Rect(0, y, w, 1), row, stride, 0);
+            }
+            catch (ArgumentException)
+            {
+                continue;
+            }
+
+            for (int x = 0; x < w; x += stepX)
+            {
+                int offset = x * 4;
+                sum += (0.2126 * row[offset + 2])
+                       + (0.7152 * row[offset + 1])
+                       + (0.0722 * row[offset]);
+                count++;
+            }
+        }
+
+        return count == 0 ? 0.5 : sum / count / 255.0;
     }
 
     private void OnLoaded(object? sender, RoutedEventArgs e)

@@ -327,4 +327,64 @@
   <data name="Tray_OverflowText" xml:space="preserve">
     <value>You are in "Replace" mode, so the native taskbar is hidden and tray icons have nowhere to show. Click here to switch to "Coexist": keep only the tray area and let the Dock handle the rest.</value>
   </data>
+  <data name="Monitor_Primary" xml:space="preserve">
+    <value>Primary display</value>
+  </data>
+  <data name="Monitor_Secondary" xml:space="preserve">
+    <value>Secondary display</value>
+  </data>
+  <data name="Launcher_Search" xml:space="preserve">
+    <value>Search apps</value>
+  </data>
+  <data name="Launcher_Loading" xml:space="preserve">
+    <value>Loading apps…</value>
+  </data>
+  <data name="Launcher_Empty" xml:space="preserve">
+    <value>No matching apps</value>
+  </data>
+  <data name="Settings_GroupToolbar" xml:space="preserve">
+    <value>Taskbar</value>
+  </data>
+  <data name="Settings_BarMode" xml:space="preserve">
+    <value>Style</value>
+  </data>
+  <data name="Settings_BarModeDock" xml:space="preserve">
+    <value>Dock capsule (fit to content)</value>
+  </data>
+  <data name="Settings_BarModeToolbar" xml:space="preserve">
+    <value>Taskbar (window / clock / icons)</value>
+  </data>
+  <data name="Settings_BarWidthMode" xml:space="preserve">
+    <value>Taskbar width</value>
+  </data>
+  <data name="Settings_BarWidthFill" xml:space="preserve">
+    <value>Fill work area</value>
+  </data>
+  <data name="Settings_BarWidthFit" xml:space="preserve">
+    <value>Fit to content</value>
+  </data>
+  <data name="Settings_BarHeight" xml:space="preserve">
+    <value>Bar height</value>
+  </data>
+  <data name="Settings_BarMargin" xml:space="preserve">
+    <value>Side margin</value>
+  </data>
+  <data name="Settings_ShowClock" xml:space="preserve">
+    <value>Show clock and date</value>
+  </data>
+  <data name="Settings_ShowLauncher" xml:space="preserve">
+    <value>Show launcher button</value>
+  </data>
+  <data name="Settings_ShowMonitorButton" xml:space="preserve">
+    <value>Show display button</value>
+  </data>
+  <data name="Settings_ShowActiveThumb" xml:space="preserve">
+    <value>Show active window thumbnail</value>
+  </data>
+  <data name="Settings_NativeBar" xml:space="preserve">
+    <value>Native taskbar</value>
+  </data>
+  <data name="Settings_NativeBarHint" xml:space="preserve">
+    <value>"Take over" hides the system taskbar and restores it on exit or crash.</value>
+  </data>
 </root>
