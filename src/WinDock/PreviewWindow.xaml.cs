@@ -32,6 +32,7 @@ public partial class PreviewWindow : Window
         NativeMethods.RegisterWindowMessage("WinDock.DumpPreview.v1");
     private string _headerApp = "";
     private bool _open;
+    private bool _closed;
 
     public PreviewWindow(IPreviewService preview, IAppLauncher launcher, ILogService log)
     {
@@ -45,8 +46,29 @@ public partial class PreviewWindow : Window
         Closed += (_, _) =>
         {
             _open = false;
+            _closed = true;
             _preview.Hide(); // 无论何种关闭路径都必须注销 HTHUMBNAIL（FR-404 / R7）
         };
+    }
+
+    /// <summary>窗口已被真正关闭（不能再用）；宿主据此决定是否重建实例。</summary>
+    public bool IsClosed => _closed;
+
+    /// <summary>
+    /// 预热：只创建 HWND 与 DWM 属性，不显示。
+    /// </summary>
+    /// <remarks>
+    /// 悬停预览的「慢」主要来自每次悬停都 new 一个 Window（BAML 解析 + 建窗 + DWM 注册），
+    /// 单次 60~150ms。启动后预热一次，之后 Open 只做布局与缩略图注册。
+    /// </remarks>
+    public void Prepare()
+    {
+        if (_closed)
+        {
+            return;
+        }
+
+        _ = new WindowInteropHelper(this).EnsureHandle();
     }
 
     private void OnSourceInitialized(object? sender, EventArgs e)
@@ -96,6 +118,12 @@ public partial class PreviewWindow : Window
     public void Open(string appName, IReadOnlyList<WindowPreviewTarget> targets,
         Point anchorTopDip, int hidden = 0)
     {
+        if (_closed)
+        {
+            return;
+        }
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
         _targets.Clear();
         _targets.AddRange(targets);
         _headerApp = appName;
@@ -105,21 +133,46 @@ public partial class PreviewWindow : Window
               + $" · {Loc.Instance.T("Preview_MoreWindows", hidden)}"
             : $"{appName} · {Loc.Instance.T("Preview_WindowCount", targets.Count)}";
 
-        Show();
-        _open = true;
-        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded,
-            new Action(() =>
-            {
-                Left = anchorTopDip.X - (ActualWidth / 2);
-                Top = anchorTopDip.Y - ActualHeight - 14;
+        // 显式尺寸：先按"不限宽高"测一次内容，再写 Width/Height。
+        // 这样位置可以**立即**算出来，不用等 Loaded 再跳一次位置（原来会看到面板先出现在
+        // 左上角再跳到 Dock 上方）。
+        RootBorder.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        Size content = RootBorder.DesiredSize;
+        Width = Math.Max(40, Math.Ceiling(content.Width));
+        Height = Math.Max(40, Math.Ceiling(content.Height));
 
-                IntPtr hwnd = new WindowInteropHelper(this).Handle;
-                _preview.Show(hwnd, targets);
-                ApplyThumbnailLayout();
-            }));
+        if (!_open)
+        {
+            Show();
+            _open = true;
+        }
+        else
+        {
+            BringToFront();
+        }
+
+        Left = anchorTopDip.X - (Width / 2);
+        Top = anchorTopDip.Y - Height - 14;
+
+        // Show/改尺寸之后必须先完成一次布局，TransformToVisual 才有正确坐标。
+        UpdateLayout();
+
+        IntPtr hwnd = new WindowInteropHelper(this).Handle;
+        _preview.Show(hwnd, targets);
+        ApplyThumbnailLayout();
+        _log.Debug(Module, $"预览面板 open 耗时={sw.Elapsed.TotalMilliseconds:F1}ms " +
+            $"条目={targets.Count} 尺寸={Width:F0}x{Height:F0}");
     }
 
-    /// <summary>幂等关闭；Closed 事件会完成 DWM 注销。</summary>
+    /// <summary>面板已存在时重新置顶（Dock 可能刚被激活到前台，Topmost 会被压下去）。</summary>
+    private void BringToFront()
+    {
+        IntPtr handle = new WindowInteropHelper(this).Handle;
+        NativeMethods.SetWindowPos(handle, NativeMethods.HWND_TOPMOST, 0, 0, 0, 0,
+            NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
+    }
+
+    /// <summary>幂等关闭；窗口实例保留复用（Closed 才真正注销 DWM）。</summary>
     public void ClosePanel()
     {
         if (!_open)
@@ -129,7 +182,7 @@ public partial class PreviewWindow : Window
 
         _preview.Hide();
         _open = false;
-        Close();
+        Hide(); // 只隐藏 HWND，不销毁：下次悬停省掉建窗与 BAML 解析
     }
 
     private void BuildItems(IReadOnlyList<WindowPreviewTarget> targets)

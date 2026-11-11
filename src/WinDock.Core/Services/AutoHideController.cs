@@ -31,6 +31,15 @@ public sealed class AutoHideController : IAutoHideController
     private bool _inFullScreen;
     private int _hideDelayMs = 800;
     private int _slideDurationMs = 180;
+
+    /// <summary>
+    /// 滑入后的硬性保护期：这段时间内忽略「非强制隐藏」。
+    /// 根因是 2px 热区窗口盖在光标下面 —— 滑入动画期间光标其实压的是热区，
+    /// 不算「在 Dock 上」，若 HideDelayMs 配成 0（或极小）就会立刻把 Dock 推回去，
+    /// 实测出现 Show→Hide→Show 的抖动（Dock 只露一条缝，用户根本没机会碰到它）。
+    /// </summary>
+    private const int ShowGraceMs = 450;
+    private DateTime _shownUtc = DateTime.MinValue;
     private readonly HashSet<string> _holds = new(StringComparer.Ordinal);
     private bool Held => _holds.Count > 0;
     private bool _disposed;
@@ -106,10 +115,16 @@ public sealed class AutoHideController : IAutoHideController
         }
 
         IsHidden = false;
+        _shownUtc = DateTime.UtcNow;
         _host.SetVisible(true);
         _host.Reposition(); // 折叠态 2×2 残留坐标必须重算，否则唤回后 Dock 错位看不到
         _host.SetInteractive(false); // 滑入途中不接收点击，避免误触
+        // 热区必须**立刻**撤掉：它是一条 2px 的顶层窗口，滑入后仍压在光标下方，
+        // 会让 Dock 认为「指针不在自己身上」而马上又把自己藏回去。
+        SyncHotZone();
         _animation.Slide(0);
+        _log.Info(Module, $"Show：滑入 target=0, 当前={_animation.SlideOffset:F1}, " +
+            $"隐藏距离={_host.HiddenDistance:F1}, 光标在 Dock 上={_host.IsPointerOverDock}");
         _timers.Schedule(SlideKey, SlideSettleMs, () => CompleteSlide(hidden: false));
         VisibilityChanged?.Invoke(this, true);
     }
@@ -128,10 +143,24 @@ public sealed class AutoHideController : IAutoHideController
             return;
         }
 
+        if (!force)
+        {
+            double sinceShow = (DateTime.UtcNow - _shownUtc).TotalMilliseconds;
+            if (sinceShow < ShowGraceMs)
+            {
+                // 刚滑入就要求隐藏：延到保护期结束再判一次（避免与滑入动画打架）。
+                _timers.Schedule(DelayKey,
+                    (int)Math.Ceiling(ShowGraceMs - sinceShow) + 30, () => Hide());
+                return;
+            }
+        }
+
         IsHidden = true;
         _timers.Cancel(DelayKey);
         _host.SetInteractive(false);
         _animation.Slide(_host.HiddenDistance);
+        _log.Info(Module, $"Hide：滑出 target={_host.HiddenDistance:F1}, " +
+            $"当前={_animation.SlideOffset:F1}, force={force}");
         _timers.Schedule(SlideKey, SlideSettleMs, () => CompleteSlide(hidden: true));
         VisibilityChanged?.Invoke(this, false);
     }

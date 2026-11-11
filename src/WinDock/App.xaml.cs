@@ -148,6 +148,44 @@ public partial class App : Application
             return;
         }
 
+        // 诊断探针：验证"唤出窗口保留原状态"（最大化 / 普通）。
+        // 用法：DockHost.exe --restore-probe=<hwnd十进制>
+        // 会先用 GetWindowPlacement 记录一次，再走真实的 AppLauncher.Activate 路径，
+        // 最后把前后的 IsIconic / IsZoomed 写进日志，供自动化脚本断言。
+        if (Array.Exists(e.Args,
+                a => a.StartsWith("--restore-probe", StringComparison.OrdinalIgnoreCase)))
+        {
+            _log = new LogService();
+            string? arg = Array.Find(e.Args,
+                a => a.StartsWith("--restore-probe", StringComparison.OrdinalIgnoreCase));
+            int eq = arg?.IndexOf('=') ?? -1;
+            if (eq > 0 && long.TryParse(arg![(eq + 1)..], out long raw) && raw != 0)
+            {
+                IntPtr handle = new(raw);
+                string before = $"iconic={NativeMethods.IsIconic(handle)} " +
+                                $"zoomed={NativeMethods.IsZoomed(handle)}";
+                _log.Info("RestoreProbe", $"restore-probe 开始 hwnd={raw} {before}");
+                var probeLauncher = new WinDock.Core.Services.AppLauncher(_log);
+                bool ok = probeLauncher.Activate(new WinDock.Core.Models.AppWindowInfo
+                {
+                    Handle = handle,
+                    Title = "restore-probe",
+                    IsMinimized = NativeMethods.IsIconic(handle),
+                });
+                Thread.Sleep(120);
+                _log.Info("RestoreProbe",
+                    $"restore-probe hwnd={raw} ok={ok} before[{before}] " +
+                    $"after[iconic={NativeMethods.IsIconic(handle)} " +
+                    $"zoomed={NativeMethods.IsZoomed(handle)}]");
+                Shutdown(ok ? 0 : 1);
+                return;
+            }
+
+            _log.Warn("RestoreProbe", "restore-probe 参数无效");
+            Shutdown(2);
+            return;
+        }
+
         _mutex = new Mutex(initiallyOwned: true, MutexName, out bool createdNew);
         if (!createdNew)
         {

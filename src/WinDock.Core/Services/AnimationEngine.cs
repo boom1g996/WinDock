@@ -1,4 +1,5 @@
 using System.Windows.Media;
+using System.Windows.Threading;
 using WinDock.Core.Interfaces;
 
 namespace WinDock.Core.Services;
@@ -54,6 +55,14 @@ public sealed class AnimationEngine : IAnimationEngine
     private double _slideDurationMs = 180;
     private double _slideCurrent;
     private double _slideTarget;
+
+    /// <summary>
+    /// K-26 兜底时间源：Dock 滑入/滑出时窗口几乎整个在屏幕外，合成器不一定出帧，
+    /// 只靠 <see cref="CompositionTarget.Rendering"/> 会**冻结在只露一条缝的位置**
+    /// （实测 offset 停在 218 中的 198）。这里加一个仅在动画期间运行的 15ms
+    /// Dispatcher 定时器做兜底，仍然是同一条时间轴、同一份状态。
+    /// </summary>
+    private DispatcherTimer? _fallbackTimer;
 
     public event EventHandler<AnimationFrameEventArgs>? Frame;
 
@@ -233,6 +242,9 @@ public sealed class AnimationEngine : IAnimationEngine
             CompositionTarget.Rendering -= OnRendering;
             _subscribed = false;
         }
+
+        _fallbackTimer?.Stop();
+        _fallbackTimer = null;
     }
 
     private void ResizeArrays(int count)
@@ -310,7 +322,43 @@ public sealed class AnimationEngine : IAnimationEngine
         _lastFrameUtc = DateTime.UtcNow;
         CompositionTarget.Rendering += OnRendering;
         _subscribed = true;
+        EnsureFallbackTimer();
     }
+
+    /// <summary>
+    /// 兜底节拍器：动画期间每 15ms 推进一次。合成器正常时 Rendering 也在跑，
+    /// <see cref="OnRendering"/> 里按「距上次推进不足 6ms 就丢弃」去重，不会加速动画。
+    /// </summary>
+    private void EnsureFallbackTimer()
+    {
+        if (_fallbackTimer is not null)
+        {
+            if (!_fallbackTimer.IsEnabled)
+            {
+                _fallbackTimer.Start();
+            }
+
+            return;
+        }
+
+        _fallbackTimer = new DispatcherTimer(DispatcherPriority.Render)
+        {
+            Interval = TimeSpan.FromMilliseconds(15),
+        };
+        _fallbackTimer.Tick += (_, _) =>
+        {
+            if (!_subscribed)
+            {
+                _fallbackTimer?.Stop();
+                return;
+            }
+
+            OnRendering(this, EventArgs.Empty);
+        };
+        _fallbackTimer.Start();
+    }
+
+    private void StopFallbackTimer() => _fallbackTimer?.Stop();
 
     private bool IsSettled()
     {
@@ -336,6 +384,12 @@ public sealed class AnimationEngine : IAnimationEngine
     {
         DateTime now = DateTime.UtcNow;
         double elapsed = Math.Min((now - _lastFrameUtc).TotalMilliseconds, 64);
+        if (elapsed < 6)
+        {
+            // 兜底定时器与合成器帧撞在了一起，丢弃这一拍（否则动画会跑成两倍速）。
+            return;
+        }
+
         _lastFrameUtc = now;
 
         if (_tapIndex >= 0 && (now - _tapStartUtc).TotalMilliseconds >= 60)
@@ -363,6 +417,7 @@ public sealed class AnimationEngine : IAnimationEngine
         {
             CompositionTarget.Rendering -= OnRendering;
             _subscribed = false;
+            StopFallbackTimer();
         }
     }
 

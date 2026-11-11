@@ -93,7 +93,7 @@ public sealed class AppLauncher : IAppLauncher
         IntPtr handle = window.Handle;
         for (int attempt = 1; attempt <= 3; attempt++)
         {
-            ShowWindow(handle, window.IsMinimized ? SW_RESTORE : SW_SHOWNORMAL);
+            RestorePreviousState(handle);
             BringWindowToTop(handle);
             if (SetForegroundWindow(handle) && GetForegroundWindow() == handle)
             {
@@ -133,6 +133,53 @@ public sealed class AppLauncher : IAppLauncher
 
         _log.Warn(Module, $"三次激活均失败：{window.Title}（{window.Handle}）");
         return false;
+    }
+
+    /// <summary>
+    /// 唤出窗口时**保持窗口原来的状态**（实机反馈：从预览面板点开的最大化窗口
+    /// 会被还原成"小窗"）。
+    /// </summary>
+    /// <remarks>
+    /// 旧实现用的是 <c>IsMinimized ? SW_RESTORE : SW_SHOWNORMAL</c>。
+    /// `SW_SHOWNORMAL` 的语义是"若窗口已最大化则先还原成普通大小"，
+    /// 所以点一个正最大化的窗口反而把它缩小了——这正是用户说的
+    /// "从预览弹窗打开的窗口都会以 win 的小窗打开"。
+    /// 现在只在「最小化」或「不可见」时才动 ShowWindow，其余一律保持现状。
+    /// </remarks>
+    private void RestorePreviousState(IntPtr handle)
+    {
+        var placement = new WINDOWPLACEMENT
+        {
+            length = Marshal.SizeOf<WINDOWPLACEMENT>(),
+        };
+        bool hasPlacement = GetWindowPlacement(handle, ref placement);
+        bool wasMaximized = IsZoomed(handle)
+            || (hasPlacement
+                && (placement.showCmd == SW_SHOWMAXIMIZED
+                    || (placement.flags & WPF_RESTORETOMAXIMIZED) != 0));
+
+        if (IsIconic(handle))
+        {
+            // 最小化的窗口：SW_RESTORE 会回到最小化之前的状态；
+            // 个别应用不认 WPF_RESTORETOMAXIMIZED，补一次 SW_MAXIMIZE 兜底。
+            ShowWindow(handle, SW_RESTORE);
+            if (wasMaximized && !IsZoomed(handle))
+            {
+                ShowWindow(handle, SW_MAXIMIZE);
+            }
+
+            _log.Debug(Module, wasMaximized
+                ? "还原最小化窗口：回到最大化"
+                : "还原最小化窗口：回到普通大小");
+            return;
+        }
+
+        if (!IsWindowVisible(handle))
+        {
+            ShowWindow(handle, wasMaximized ? SW_SHOWMAXIMIZED : SW_SHOW);
+        }
+
+        // 已可见的窗口（普通或最大化）：不动 ShowWindow，避免打乱用户摆好的尺寸。
     }
 
     public bool CloseWindow(AppWindowInfo window)

@@ -648,6 +648,116 @@ public static class SelfTest
                     typeof(TrayIconService).GetMethod("RunBalloonClick",
                         System.Reflection.BindingFlags.Instance
                         | System.Reflection.BindingFlags.NonPublic) is not null);
+
+                // ---- 2026-11-11 实机回归闸门 ----------------------------------
+                // 这四条对应"看起来改好了但一上手就崩/卡"的几个真 bug，
+                // 用反射调用真实方法而不是读源码，避免注释里的同名文字让断言假通过。
+
+                // 1) 系统区矢量字形：Geometry.Parse 在 .NET 10 返回 StreamGeometry，
+                //    旧代码 (PathGeometry) 强转会抛 InvalidCastException，启动 0.3s 就崩。
+                bool glyphOk;
+                try
+                {
+                    System.Reflection.MethodInfo? glyph = typeof(MainWindow).GetMethod(
+                        "CreateSystemGlyph",
+                        System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+                    glyphOk = glyph is not null
+                              && glyph.Invoke(null, new object[] { "recycleBin" })
+                                  is System.Windows.Media.ImageSource;
+                }
+                catch (Exception)
+                {
+                    glyphOk = false;
+                }
+
+                Check("系统区字形可创建（不再 PathGeometry 强转崩溃）", glyphOk);
+
+                // 2) 唤出窗口必须保留原状态：最大化窗口不能被 SW_SHOWNORMAL 还原成小窗。
+                Check("唤出窗口保留原状态（RestorePreviousState 存在）",
+                    typeof(AppLauncher).GetMethod("RestorePreviousState",
+                        System.Reflection.BindingFlags.Instance
+                        | System.Reflection.BindingFlags.NonPublic) is not null);
+
+                // 3) 预览面板复用 + 预热：每次悬停 new Window 是"卡慢"的根因。
+                Check("预览面板预热与复用就绪（Prepare/IsClosed）",
+                    typeof(PreviewWindow).GetMethod("Prepare") is not null
+                    && typeof(PreviewWindow).GetProperty("IsClosed") is not null);
+
+                // 4) 滑入动画兜底时间源：窗口几乎全在屏外时合成器不出帧，
+                //    只有 CompositionTarget.Rendering 会冻结在"只露一条缝"。
+                Check("动画引擎有兜底时间源（避免滑入冻结）",
+                    typeof(AnimationEngine).GetField("_fallbackTimer",
+                        System.Reflection.BindingFlags.Instance
+                        | System.Reflection.BindingFlags.NonPublic) is not null);
+
+                // 5) 滑入保护期：HideDelayMs=0 + 2px 热区会让 Dock 刚滑入就被推回去。
+                Check("自动隐藏有滑入保护期（ShowGraceMs）",
+                    typeof(AutoHideController).GetField("ShowGraceMs",
+                        System.Reflection.BindingFlags.Static
+                        | System.Reflection.BindingFlags.NonPublic) is not null);
+
+                // 6) 指针命中改为几何判定：窗口被移到静止光标下时 WPF 收不到 MouseEnter。
+                Check("Dock 指针命中含光标几何判定（IsCursorInsideDock）",
+                    typeof(MainWindow).GetMethod("IsCursorInsideDock",
+                        System.Reflection.BindingFlags.Instance
+                        | System.Reflection.BindingFlags.NonPublic) is not null);
+
+                // 7) 预览悬停延迟默认值贴近 macOS（250ms），不再是 500ms。
+                Check("预览悬停延迟默认 250ms", new DockConfig().Behavior.PreviewHoverDelayMs == 250);
+
+                // 8) 真窗口验证「唤出保留原状态」：最小化的最大化窗口唤出后必须仍是最大化，
+                //    普通窗口也不能因为唤出被"顺手最大化"。旧实现固定用 SW_SHOWNORMAL，
+                //    会把最大化窗口还原成小窗（实机 bug：从预览面板点开变成小窗）。
+                try
+                {
+                    var probe = new Window
+                    {
+                        Width = 420,
+                        Height = 300,
+                        Left = -6000,   // 放在屏幕外，不打扰用户
+                        Top = -6000,
+                        WindowStartupLocation = WindowStartupLocation.Manual,
+                        ShowInTaskbar = false,
+                        ShowActivated = false,
+                        Title = "WinDock 状态自检",
+                    };
+                    probe.Show();
+                    IntPtr probeHwnd = new System.Windows.Interop.WindowInteropHelper(probe).Handle;
+                    var launcher = new AppLauncher(log);
+                    var info = new AppWindowInfo
+                    {
+                        Handle = probeHwnd,
+                        Title = "WinDock 状态自检",
+                        IsMinimized = true,
+                    };
+
+                    // A：最大化 → 最小化 → 唤出，应仍是最大化
+                    NativeMethods.ShowWindow(probeHwnd, NativeMethods.SW_MAXIMIZE);
+                    NativeMethods.ShowWindow(probeHwnd, NativeMethods.SW_MINIMIZE);
+                    bool aOk = launcher.Activate(info);
+                    bool aZoomed = NativeMethods.IsZoomed(probeHwnd);
+
+                    // B：普通大小 → 最小化 → 唤出，应保持普通（不被最大化）
+                    NativeMethods.ShowWindow(probeHwnd, NativeMethods.SW_RESTORE);
+                    NativeMethods.SetWindowPos(probeHwnd, IntPtr.Zero, 0, 0, 420, 300,
+                        NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
+                    NativeMethods.ShowWindow(probeHwnd, NativeMethods.SW_MINIMIZE);
+                    bool bOk = launcher.Activate(info);
+                    bool bZoomed = NativeMethods.IsZoomed(probeHwnd);
+
+                    probe.Close();
+                    // 只断言「窗口状态」：自检进程通常抢不到前台（前台是终端），
+                    // Activate 的返回值会因为 SetForegroundWindow 失败而为 false，
+                    // 那是环境限制，与"还原成什么尺寸"无关。
+                    Check("最小化的最大化窗口唤出后仍最大化", aZoomed,
+                        $"ok={aOk} zoomed={aZoomed}");
+                    Check("普通窗口唤出保持普通大小", !bZoomed,
+                        $"ok={bOk} zoomed={bZoomed}");
+                }
+                catch (Exception ex)
+                {
+                    Check("唤出状态验证可执行", false, ex.Message);
+                }
             }
         }
         catch (Exception ex)

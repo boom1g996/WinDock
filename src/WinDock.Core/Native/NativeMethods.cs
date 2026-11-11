@@ -65,10 +65,18 @@ public static partial class NativeMethods
     public const uint SWP_NOZORDER = 0x0004;
     public const uint SWP_NOACTIVATE = 0x0010;
     public const uint SWP_FRAMECHANGED = 0x0020;
+    public const uint SWP_NOSIZE = 0x0001;
+    public const uint SWP_NOMOVE = 0x0002;
 
     public const int SW_SHOWNORMAL = 1;
+    public const int SW_SHOWMINIMIZED = 2;
+    public const int SW_SHOWMAXIMIZED = 3;
+    public const int SW_MAXIMIZE = 3;
     public const int SW_MINIMIZE = 6;
     public const int SW_RESTORE = 9;
+
+    /// <summary>WINDOWPLACEMENT.flags：最小化前处于最大化，SW_RESTORE 应回到最大化。</summary>
+    public const int WPF_RESTORETOMAXIMIZED = 0x0002;
 
     public const uint WM_CLOSE = 0x0010;
     public const uint MONITOR_DEFAULTTOPRIMARY = 0x00000001;
@@ -214,6 +222,28 @@ public static partial class NativeMethods
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern bool IsIconic(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool IsZoomed(IntPtr hWnd);
+
+    /// <summary>窗口摆放信息：还原"最小化前的状态（最大化/普通）"必须靠它。</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct WINDOWPLACEMENT
+    {
+        public int length;
+        public int flags;
+        public int showCmd;
+        public POINT ptMinPosition;
+        public POINT ptMaxPosition;
+        public RECT rcNormalPosition;
+    }
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool GetWindowPlacement(IntPtr hWnd, ref WINDOWPLACEMENT lpwndpl);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool SetWindowPlacement(IntPtr hWnd,
+        ref WINDOWPLACEMENT lpwndpl);
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);

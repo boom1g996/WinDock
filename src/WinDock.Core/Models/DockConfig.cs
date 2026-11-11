@@ -133,7 +133,7 @@ public sealed class BehaviorConfig
     public bool PreviewEnabled { get; set; } = true;
 
     /// <summary>悬停到弹出预览的延迟（FR-401，200~1500ms）。</summary>
-    public int PreviewHoverDelayMs { get; set; } = 500;
+    public int PreviewHoverDelayMs { get; set; } = 250;
 
     /// <summary>同时注册的 DWM 缩略图上限（FR-404，最多 6 个）。</summary>
     public int PreviewMaxWindows { get; set; } = 6;

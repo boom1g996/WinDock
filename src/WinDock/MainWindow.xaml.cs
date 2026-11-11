@@ -83,6 +83,8 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
     private double _baseLeft;
     private double _slideOffset;
     private bool _pointerOver;
+    private bool _cursorInsideDock;
+    private DispatcherTimer? _presenceTimer;
     private bool _animationsPaused;
 
     // WD-032：最小化事件钩子（映射到对应图标触发「落入 Dock」反馈）。
@@ -365,7 +367,37 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         ? (Width > 0 ? Width : ActualWidth > 0 ? ActualWidth : 126)
         : (Height > 0 ? Height : ActualHeight > 0 ? ActualHeight : 126)) + 8;
 
-    public bool IsPointerOverDock => _pointerOver;
+    public bool IsPointerOverDock => _pointerOver || IsCursorInsideDock();
+
+    /// <summary>
+    /// 真实光标命中判定（物理像素）。
+    /// </summary>
+    /// <remarks>
+    /// Windows 不会因为「窗口被移动到静止的光标下面」而补发 WM_MOUSEMOVE，
+    /// 所以滑入后 WPF 的 <c>IsMouseOver</c> 会一直停在 false。自动隐藏据此判定
+    /// 就会认为鼠标不在 Dock 上，滑入 0.45s 后立刻又把自己推回去 ——
+    /// 实机表现就是 Dock 只闪一下、永远停不到手边。这里补一次几何命中。
+    /// </remarks>
+    private bool IsCursorInsideDock()
+    {
+        if (!IsDockVisible)
+        {
+            return false;
+        }
+
+        IntPtr handle = new WindowInteropHelper(this).Handle;
+        if (handle == IntPtr.Zero
+            || !NativeMethods.GetWindowRect(handle, out NativeMethods.RECT rect)
+            || !NativeMethods.GetCursorPos(out NativeMethods.POINT cursor))
+        {
+            return false;
+        }
+
+        // 边界取闭区间：Dock 贴边时 offsetFromEdge 会留下 1px 缝，
+        // 光标停在最后一像素上应当算「在 Dock 上」，否则自动隐藏会抖。
+        return cursor.X >= rect.Left && cursor.X <= rect.Right
+               && cursor.Y >= rect.Top && cursor.Y <= rect.Bottom;
+    }
 
     public void SetSlideOffset(double dip)
     {
@@ -405,6 +437,68 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         // （Collapsed 与 Hidden 都一样）都会让 WPF 把 HWND 收缩到 2×2，唤出时重新测量布局。
         // 已实测 Hidden 无法避免，故维持 Collapsed；测试脚本按「窗口身份」而非尺寸识别。
         Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        UpdatePresenceWatcher(visible);
+    }
+
+    /// <summary>
+    /// 光标在场巡检（仅 Dock 可见且开了自动隐藏时运行）。
+    /// </summary>
+    /// <remarks>
+    /// 只靠 WPF 的 MouseEnter/MouseLeave 不可靠：窗口被「滑到」静止的光标下面时
+    /// Windows 不补发 WM_MOUSEMOVE，Dock 会既收不到进入也收不到离开 ——
+    /// 前者表现为刚滑入就被推回去，后者表现为鼠标移走后 Dock 赖着不收。
+    /// 这里用 160ms 的几何巡检兜底（两次 Win32 取值，稳态开销可忽略）。
+    /// </remarks>
+    private void UpdatePresenceWatcher(bool visible)
+    {
+        bool need = visible && _current.Behavior.AutoHide;
+        if (need)
+        {
+            _presenceTimer ??= new DispatcherTimer(DispatcherPriority.Background)
+            {
+                Interval = TimeSpan.FromMilliseconds(160),
+            };
+            if (_presenceTimer.IsEnabled)
+            {
+                return;
+            }
+
+            _presenceTimer.Tick -= OnPresenceTick;
+            _presenceTimer.Tick += OnPresenceTick;
+            _cursorInsideDock = IsCursorInsideDock();
+            _presenceTimer.Start();
+            return;
+        }
+
+        _presenceTimer?.Stop();
+        _cursorInsideDock = false;
+    }
+
+    private void OnPresenceTick(object? sender, EventArgs e)
+    {
+        if (!IsDockVisible)
+        {
+            _presenceTimer?.Stop();
+            return;
+        }
+
+        bool inside = IsCursorInsideDock();
+        if (inside == _cursorInsideDock)
+        {
+            return;
+        }
+
+        _cursorInsideDock = inside;
+        _pointerOver = inside;
+        if (inside)
+        {
+            PointerEntered?.Invoke(this, EventArgs.Empty);
+        }
+        else
+        {
+            ClearHover();
+            PointerLeft?.Invoke(this, EventArgs.Empty);
+        }
     }
 
     /// <summary>
@@ -526,6 +620,7 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         RebuildIcons();
         Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(Position));
         ApplyBackdrop();
+        UpdatePresenceWatcher(IsDockVisible); // 自动隐藏开关可能刚被改
     }
 
     /// <summary>窗口枚举事件 / 配置变更后的重建入口（UI 线程安全）。</summary>
@@ -847,10 +942,18 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             _ => "M4,4 L20,4 L20,20 L4,20 Z",
         };
 
-        var geometry = (PathGeometry)Geometry.Parse(data);
-        geometry.FillRule = FillRule.Nonzero; // 重叠子路径实心填充，避免出现镂空
+        // 注意：.NET 10 的 Geometry.Parse 返回的是**已冻结的 StreamGeometry**，
+        // 早期实现直接 `(PathGeometry)` 强转会抛 InvalidCastException，
+        // 在 BuildItems 里就是"启动 0.3s 即未处理异常 → Dock 整条消失"（本次实机 bug）。
+        // 这里只读取几何，不再改 FillRule：这些字形的子路径互不重叠，默认规则已足够。
+        Geometry geometry = Geometry.Parse(data);
+        // 观感：胶囊在浅色桌面下几乎是白的，纯白字形会整块"消失"（实机截图里
+        // 回收站/任务视图/显示桌面就是三团白斑）。给一层半透明深色描边，
+        // 深浅背景都能读出形状。
+        var pen = new Pen(new SolidColorBrush(Color.FromArgb(0x66, 0, 0, 0)), 1.2);
+        pen.Freeze();
         var drawing = new GeometryDrawing(
-            new SolidColorBrush(Color.FromRgb(0xF2, 0xF4, 0xF8)), null, geometry);
+            new SolidColorBrush(Color.FromRgb(0xF2, 0xF4, 0xF8)), pen, geometry);
         var image = new DrawingImage(drawing);
         image.Freeze();
         return image;
@@ -1046,33 +1149,65 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
             return;
         }
 
-        if (_previewWindow is not null)
-        {
-            // 切换图标：先注销上一组句柄；WPF Window 关闭后不可复用，直接换新实例。
-            _previewWindow.ClosePanel();
-            _previewWindow = null;
-        }
-
         _autoHide?.SetHeld(PreviewHoldReason, true);
 
-        var panel = new PreviewWindow(_preview, _launcher, _log);
-        panel.HoverEntered += (_, _) => _timers.Cancel(PreviewCloseKey);
-        panel.HoverLeft += (_, _) =>
-            _timers.Schedule(PreviewCloseKey, PreviewCloseDelayMs, VerifyPreviewLeave);
-        panel.ThumbnailActivated += (_, _) => ClosePreview();
-        // WD-037 / AC-05：单窗口关闭后刷新运行指示。WM_CLOSE 是异步请求，
-        // 延时 600ms 等目标窗口退出（枚举器的 WindowsChanged 也会自行触发，
-        // RefreshItems 幂等，两边重叠无害）。
-        panel.WindowClosed += (_, _) =>
-            _timers.Schedule(PreviewRefreshKey, 600, RefreshItems);
-        _previewWindow = panel;
+        // 面板实例复用：一次悬停 new 一个 Window 要付 BAML 解析 + 建窗 + DWM 注册，
+        // 实机体感就是"鼠标压上去半天才弹出来"。只有被真正 Close 过才重建。
+        if (_previewWindow is null || _previewWindow.IsClosed)
+        {
+            var panel = new PreviewWindow(_preview, _launcher, _log);
+            panel.HoverEntered += (_, _) => _timers.Cancel(PreviewCloseKey);
+            panel.HoverLeft += (_, _) =>
+                _timers.Schedule(PreviewCloseKey, PreviewCloseDelayMs, VerifyPreviewLeave);
+            panel.ThumbnailActivated += (_, _) => ClosePreview();
+            // WD-037 / AC-05：单窗口关闭后刷新运行指示。WM_CLOSE 是异步请求，
+            // 延时 600ms 等目标窗口退出（枚举器的 WindowsChanged 也会自行触发，
+            // RefreshItems 幂等，两边重叠无害）。
+            panel.WindowClosed += (_, _) =>
+                _timers.Schedule(PreviewRefreshKey, 600, RefreshItems);
+            _previewWindow = panel;
+        }
+
         _previewGroupKey = group.Key;
         _previewPinned = pinned;
 
         Point physical = control.PointToScreen(new Point(control.ActualWidth / 2, 0));
         Matrix fromDevice = PresentationSource.FromVisual(control)?
             .CompositionTarget?.TransformFromDevice ?? Matrix.Identity;
-        panel.Open(control.Item.DisplayName, targets, fromDevice.Transform(physical), hiddenWindows);
+        _previewWindow.Open(control.Item.DisplayName, targets,
+            fromDevice.Transform(physical), hiddenWindows);
+    }
+
+    /// <summary>
+    /// 预热预览面板：启动后（空闲优先级）建好 HWND 但不显示。
+    /// 首次悬停不用再付建窗成本，也避免 Dock 布局重建时被预热打断。
+    /// </summary>
+    private void PrewarmPreview()
+    {
+        if (_preview is null || _timers is null || _previewWindow is not null
+            || !_current.Behavior.PreviewEnabled)
+        {
+            return;
+        }
+
+        try
+        {
+            var panel = new PreviewWindow(_preview, _launcher, _log);
+            panel.HoverEntered += (_, _) => _timers.Cancel(PreviewCloseKey);
+            panel.HoverLeft += (_, _) =>
+                _timers.Schedule(PreviewCloseKey, PreviewCloseDelayMs, VerifyPreviewLeave);
+            panel.ThumbnailActivated += (_, _) => ClosePreview();
+            panel.WindowClosed += (_, _) =>
+                _timers.Schedule(PreviewRefreshKey, 600, RefreshItems);
+            panel.Prepare();
+            _previewWindow = panel;
+            _log.Info("PreviewPanel", "预览面板已预热（HWND 就绪，未显示）");
+        }
+        catch (Exception ex)
+        {
+            _log.Warn("PreviewPanel", $"预热失败：{ex.Message}");
+            _previewWindow = null;
+        }
     }
 
     /// <summary>
@@ -1104,18 +1239,18 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         }));
     }
 
-    /// <summary>幂等关闭：注销全部 DWM 句柄并解除自动隐藏抑制。</summary>
+    /// <summary>幂等关闭：注销全部 DWM 句柄并解除自动隐藏抑制（实例保留复用）。</summary>
     private void ClosePreview()
     {
         _timers?.Cancel(PreviewOpenKey);
         _timers?.Cancel(PreviewCloseKey);
-        PreviewWindow? panel = _previewWindow;
-        _previewWindow = null;
+        // 注意：**不要**把 _previewWindow 置空。面板实例是复用的，
+        // 置空会让下一次悬停重新 new 一个窗口，白付一次建窗成本（悬停"卡慢"的根因之一）。
         _previewGroupKey = null;
         _previewPinned = false;
-        if (panel is not null)
+        if (_previewWindow is not null)
         {
-            panel.ClosePanel();
+            _previewWindow.ClosePanel();
         }
         else
         {
@@ -2329,6 +2464,9 @@ public partial class MainWindow : Window, IDockWindowHost, IDockDragHost
         // 这里以真实布局结果为准，避免开屏瞬间窗口偏小。
         SyncWindowSize();
         ApplyBackdrop();
+
+        // 预热预览面板放到空闲优先级：不抢启动帧，用户第一次悬停就能"立刻"弹出。
+        Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(PrewarmPreview));
     }
 
     private static SolidColorBrush ParseBorderBrush(string value)

@@ -34,6 +34,8 @@ public partial class DockIconControl : UserControl
     private bool _running;
     private bool _foreground;
     private string _indicatorStyle = "dot";
+    private string _labelMode = "tooltip";
+    private bool _hovered;
 
     // WD-022：垂直 Dock（左/右）时放大沿垂直方向生长、跳动朝屏幕内侧。
     private bool _vertical;
@@ -65,7 +67,9 @@ public partial class DockIconControl : UserControl
     {
         Item = item;
         IconImage.Source = item.Icon;
-        ToolTip = item.DisplayName;
+        // 名称走自绘浮签（悬停即现）；系统 ToolTip 有 ~1s 延迟且是 Windows 气泡样式，
+        // 在 Dock 上会明显"不像 macOS"，只有错误说明时才用。
+        ToolTip = null;
         Label.Text = item.DisplayName;
         AutomationProperties.SetName(this, item.DisplayName);
         AutomationProperties.SetHelpText(this, item.DisplayName);
@@ -205,21 +209,34 @@ public partial class DockIconControl : UserControl
         };
     }
 
-    /// <summary>8.4 名称显示：tooltip（默认）/ always（图标内常显）/ never。</summary>
+    /// <summary>
+    /// 8.4 名称显示：always（常显浮签）/ tooltip（悬停浮签，macOS 行为）/ never。
+    /// </summary>
+    /// <remarks>
+    /// 「always」不再画在图标内部：旧实现是一条压住图标底部约 1/3 高度的深色条，
+    /// 整排图标都被压扁，观感离 macOS 很远。现在改成图标正上方的圆角浮签。
+    /// 「tooltip」也改用同一个浮签（悬停即现），比系统 ToolTip 快得多也更像 macOS。
+    /// </remarks>
     public void SetLabelMode(string mode)
     {
-        bool always = string.Equals(mode, "always", StringComparison.OrdinalIgnoreCase);
-        bool never = string.Equals(mode, "never", StringComparison.OrdinalIgnoreCase);
-        LabelHost.Visibility = always ? Visibility.Visible : Visibility.Collapsed;
-        bool hasTooltip = !never;
-        if (hasTooltip)
+        _labelMode = string.Equals(mode, "always", StringComparison.OrdinalIgnoreCase)
+            ? "always"
+            : string.Equals(mode, "never", StringComparison.OrdinalIgnoreCase)
+                ? "never"
+                : "tooltip";
+        UpdateLabel();
+    }
+
+    /// <summary>按「模式 + 悬停态」决定浮签是否可见；never 永远不显示。</summary>
+    private void UpdateLabel()
+    {
+        bool show = _labelMode switch
         {
-            ToolTip = Item.DisplayName;
-        }
-        else
-        {
-            ToolTip = null;
-        }
+            "always" => true,
+            "tooltip" => _hovered,
+            _ => false,
+        };
+        LabelHost.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>10 UI 规范错误态：图标上角红点，原因写进 ToolTip（hover 可见）。</summary>
@@ -257,6 +274,8 @@ public partial class DockIconControl : UserControl
     /// </summary>
     public void SetHoverVisual(bool hovered)
     {
+        _hovered = hovered;
+        UpdateLabel();
         var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
         _lift.BeginAnimation(TranslateTransform.YProperty,
             new DoubleAnimation(hovered ? -HoverLift : 0, HoverDuration) { EasingFunction = ease });
